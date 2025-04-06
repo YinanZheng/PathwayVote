@@ -16,7 +16,7 @@ pathway_vote(
   rank_decreasing = FALSE,
   use_abs = FALSE,
   min_vote_support = 3,
-  min_genes = 3,
+  min_genes_per_hit = 3,
   verbose = FALSE
 )
 }
@@ -44,7 +44,7 @@ If FALSE, sorts from low to high. Use FALSE for p-values; TRUE for absolute stat
 
 \item{min_vote_support}{Minimum number of enrichment combinations in which a pathway must appear to be retained. Default = 3.}
 
-\item{min_genes}{Minimum number of genes (`Count`) a pathway must include in any enrichment result to be considered. Default = 3.}
+\item{min_genes_per_hit}{Minimum number of genes (`Count`) a pathway must include in any enrichment result to be considered. Default = 3.}
 
 \item{verbose}{Logical, whether to print progress messages.}
 }
