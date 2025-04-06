@@ -15,6 +15,8 @@ pathway_vote(
   rank_column = "p_value",
   rank_decreasing = FALSE,
   use_abs = FALSE,
+  min_vote_support = 3,
+  min_genes = 3,
   verbose = FALSE
 )
 }
@@ -37,6 +39,12 @@ pathway_vote(
 
 \item{rank_decreasing}{Logical. If TRUE (default), sorts CpGs from high to low based on `rank_column`.
 If FALSE, sorts from low to high. Use FALSE for p-values; TRUE for absolute statistics.}
+
+\item{use_abs}{Logical. Whether to apply `abs()` to the ranking column (e.g., p-value, correlation, score) before sorting CpGs.}
+
+\item{min_vote_support}{Minimum number of enrichment combinations in which a pathway must appear to be retained. Default = 3.}
+
+\item{min_genes}{Minimum number of genes (`Count`) a pathway must include in any enrichment result to be considered. Default = 3.}
 
 \item{verbose}{Logical, whether to print progress messages.}
 }

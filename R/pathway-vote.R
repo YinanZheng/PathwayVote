@@ -226,6 +226,9 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
 #' @param rank_column A character string indicating which column in `ewas_data` to use for ranking (default: "p_value").
 #' @param rank_decreasing Logical. If TRUE (default), sorts CpGs from high to low based on `rank_column`.
 #'                        If FALSE, sorts from low to high. Use FALSE for p-values; TRUE for absolute statistics.
+#' @param use_abs Logical. Whether to apply `abs()` to the ranking column (e.g., p-value, correlation, score) before sorting CpGs.
+#' @param min_vote_support Minimum number of enrichment combinations in which a pathway must appear to be retained. Default = 3.
+#' @param min_genes Minimum number of genes (`Count`) a pathway must include in any enrichment result to be considered. Default = 3.
 #' @param verbose Logical, whether to print progress messages.
 #' @return A list containing enrichment results and CpG-gene mappings.
 #' @export
@@ -234,6 +237,8 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
                          rank_column = "p_value",
                          rank_decreasing = FALSE,
                          use_abs = FALSE,
+                         min_vote_support = 3,
+                         min_genes = 3,
                          verbose = FALSE) {
 
   # ---- Load and setup parallel environment ----
@@ -315,6 +320,14 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
       seed = TRUE,
       packages = c("PathwayVote", "ReactomePA", "clusterProfiler", "org.Hs.eg.db")
     )
+  )
+
+  # ---- Prune pathways by vote ----
+  enrich_results <- prune_pathways_by_vote(
+    enrich_results,
+    min_vote_support = min_vote_support,
+    min_genes = min_genes_per_hit,
+    verbose = verbose
   )
 
   # ---- Combine and return results ----
