@@ -104,18 +104,18 @@ run_enrichment <- function(gene_list, databases, r, d, verbose = FALSE) {
   if ("Reactome" %in% databases) {
     if (verbose) message("  Analyzing Reactome...")
     enrich_results$Reactome <- as.data.frame(
-      enrichPathway(gene = gene_list, organism = "human", pvalueCutoff = 1, pAdjustMethod = "BH", readable = TRUE)
+      enrichPathway(gene = gene_list, organism = "human", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH", readable = TRUE)
     )
   }
   if ("GO" %in% databases) {
     if (verbose) message("  Analyzing GO...")
     enrich_results$GO <- as.data.frame(
-      enrichGO(gene = gene_list, OrgDb = org.Hs.eg.db, ont = "ALL", pvalueCutoff = 1, pAdjustMethod = "BH", readable = TRUE)
+      enrichGO(gene = gene_list, OrgDb = org.Hs.eg.db, ont = "ALL", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH", readable = TRUE)
     )
   }
   if ("KEGG" %in% databases) {
     if (verbose) message("  Analyzing KEGG...")
-    kegg_enrich <- enrichKEGG(gene = gene_list, organism = "hsa", pvalueCutoff = 1, pAdjustMethod = "BH")
+    kegg_enrich <- enrichKEGG(gene = gene_list, organism = "hsa", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH")
     kegg_enrich_readable <- setReadable(kegg_enrich, OrgDb = org.Hs.eg.db, keyType = "ENTREZID")
     enrich_results$KEGG <- as.data.frame(kegg_enrich_readable)
   }
