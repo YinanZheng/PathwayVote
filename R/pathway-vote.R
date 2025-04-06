@@ -1,3 +1,6 @@
+#' @importFrom future plan
+#' @importFrom furrr future_map furrr_options
+#' @importFrom parallelly availableCores
 #' @importFrom ReactomePA enrichPathway
 #' @importFrom clusterProfiler enrichGO enrichKEGG setReadable
 #' @importFrom org.Hs.eg.db org.Hs.eg.db
@@ -243,9 +246,15 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
   suppressMessages({
     lapply(required_pkgs, library, character.only = TRUE)
   })
+
+  available_cores <- parallelly::availableCores(logical = TRUE)
+  max_safe_workers <- floor(min(available_cores, parallelly::availableCores("system")) * 0.75)
+  max_safe_workers <- max(1, max_safe_workers)
+
   if (!inherits(future::plan(), "multisession")) {
-    future::plan(future::multisession, workers = max(1, parallel::detectCores() - 1))
+    future::plan(future::multisession, workers = max_safe_workers)
   }
+  if (verbose) message("Using ", max_safe_workers, " parallel workers.")
 
   # ---- Input checks ----
   if (!inherits(eQTM, "eQTM")) stop("eQTM must be an eQTM object")
