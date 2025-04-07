@@ -21,7 +21,6 @@ gene_filter <- function(eQTM, stat_threshold, distance) {
   }
   eQTM_data <- getData(eQTM)
 
-  # 通用过滤逻辑：对所有支持的 statistics_type 都取绝对值
   eQTM_filtered <- eQTM_data[abs(eQTM_data$statistics) >= stat_threshold & eQTM_data$distance <= distance, ]
 
   return(list(entrez = unique(na.omit(eQTM_filtered$entrez)), p_values = eQTM_filtered$p_value))
@@ -66,7 +65,6 @@ filter_gene_lists <- function(eQTM, stat_grid, distance_grid, overlap_threshold 
       gene_list <- gene_list[!is.na(gene_list)]
       if (length(gene_list) == 0) next
 
-      # 过滤重复 gene 列表（防止 vote bias）
       gene_list_key <- paste(sort(gene_list), collapse = "_")
       if (any(vapply(gene_lists, function(g) identical(sort(g), sort(gene_list)), logical(1)))) next
 
@@ -95,29 +93,32 @@ filter_gene_lists <- function(eQTM, stat_grid, distance_grid, overlap_threshold 
 #' @param databases Character vector of databases (e.g., "Reactome", "GO", "KEGG").
 #' @param r Numeric, statistics threshold used for filtering.
 #' @param d Numeric, distance threshold used for filtering.
+#' @param readable Logical, whether to convert Entrez IDs to gene symbols in enrichment results. Default is FALSE to retain Entrez IDs (recommended for programmatic comparison).
 #' @param verbose Logical, whether to print progress messages.
 #' @return A list of enrichment results for each database.
 #' @export
-run_enrichment <- function(gene_list, databases, r, d, verbose = FALSE) {
+run_enrichment <- function(gene_list, databases, r, d, readable = FALSE, verbose = FALSE) {
   if (verbose) message(sprintf("Running enrichment for statistics threshold = %.2f, d = %d", r, d))
   enrich_results <- list()
   if ("Reactome" %in% databases) {
     if (verbose) message("  Analyzing Reactome...")
     enrich_results$Reactome <- as.data.frame(
-      enrichPathway(gene = gene_list, organism = "human", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH", readable = TRUE)
+      enrichPathway(gene = gene_list, organism = "human", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH", readable = readable)
     )
   }
   if ("GO" %in% databases) {
     if (verbose) message("  Analyzing GO...")
     enrich_results$GO <- as.data.frame(
-      enrichGO(gene = gene_list, OrgDb = org.Hs.eg.db, ont = "ALL", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH", readable = TRUE)
+      enrichGO(gene = gene_list, OrgDb = org.Hs.eg.db, ont = "ALL", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH", readable = readable)
     )
   }
   if ("KEGG" %in% databases) {
     if (verbose) message("  Analyzing KEGG...")
     kegg_enrich <- enrichKEGG(gene = gene_list, organism = "hsa", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH")
-    kegg_enrich_readable <- setReadable(kegg_enrich, OrgDb = org.Hs.eg.db, keyType = "ENTREZID")
-    enrich_results$KEGG <- as.data.frame(kegg_enrich_readable)
+    if (readable) {
+      kegg_enrich <- setReadable(kegg_enrich, OrgDb = org.Hs.eg.db, keyType = "ENTREZID")
+    }
+    enrich_results$KEGG <- as.data.frame(kegg_enrich)
   }
   if (verbose) message("  Enrichment completed.")
   return(enrich_results)
@@ -229,6 +230,7 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
 #' @param use_abs Logical. Whether to apply `abs()` to the ranking column (e.g., p-value, correlation, score) before sorting CpGs.
 #' @param min_vote_support Minimum number of enrichment combinations in which a pathway must appear to be retained. Default = 3.
 #' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include in any enrichment result to be considered. Default = 3.
+#' @param readable Logical, whether to convert Entrez IDs to gene symbols in enrichment results. Default is FALSE to retain Entrez IDs (recommended for programmatic comparison).
 #' @param verbose Logical, whether to print progress messages.
 #' @return A list containing enrichment results and CpG-gene mappings.
 #' @export
@@ -239,6 +241,7 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
                          use_abs = FALSE,
                          min_vote_support = 3,
                          min_genes_per_hit = 3,
+                         readable = FALSE,
                          verbose = FALSE) {
 
   # ---- Load and setup parallel environment ----
@@ -288,7 +291,7 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
 
     for (i in seq_along(filtered_results$gene_lists)) {
       gene_list_i <- filtered_results$gene_lists[[i]]
-      if (length(gene_list_i) == 0) next  # 跳过无效组合
+      if (length(gene_list_i) == 0) next  # skip invalid combo
 
       valid_combination_count <- valid_combination_count + 1
 
@@ -313,6 +316,7 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
         databases = databases,
         r = x$param["stat"],
         d = x$param["d"],
+        readable = readable,
         verbose = verbose
       )
     },

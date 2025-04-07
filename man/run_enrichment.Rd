@@ -4,7 +4,7 @@
 \alias{run_enrichment}
 \title{Run Enrichment Analysis on Gene Lists}
 \usage{
-run_enrichment(gene_list, databases, r, d, verbose = FALSE)
+run_enrichment(gene_list, databases, r, d, readable = FALSE, verbose = FALSE)
 }
 \arguments{
 \item{gene_list}{Character vector of Entrez IDs.}
@@ -14,6 +14,8 @@ run_enrichment(gene_list, databases, r, d, verbose = FALSE)
 \item{r}{Numeric, statistics threshold used for filtering.}
 
 \item{d}{Numeric, distance threshold used for filtering.}
+
+\item{readable}{Logical, whether to convert Entrez IDs to gene symbols in enrichment results. Default is FALSE to retain Entrez IDs (recommended for programmatic comparison).}
 
 \item{verbose}{Logical, whether to print progress messages.}
 }

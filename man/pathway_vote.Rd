@@ -17,6 +17,7 @@ pathway_vote(
   use_abs = FALSE,
   min_vote_support = 3,
   min_genes_per_hit = 3,
+  readable = FALSE,
   verbose = FALSE
 )
 }
@@ -45,6 +46,8 @@ If FALSE, sorts from low to high. Use FALSE for p-values; TRUE for absolute stat
 \item{min_vote_support}{Minimum number of enrichment combinations in which a pathway must appear to be retained. Default = 3.}
 
 \item{min_genes_per_hit}{Minimum number of genes (`Count`) a pathway must include in any enrichment result to be considered. Default = 3.}
+
+\item{readable}{Logical, whether to convert Entrez IDs to gene symbols in enrichment results. Default is FALSE to retain Entrez IDs (recommended for programmatic comparison).}
 
 \item{verbose}{Logical, whether to print progress messages.}
 }

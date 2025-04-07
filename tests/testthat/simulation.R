@@ -42,7 +42,7 @@ run_benchmark_simulations <- function(
     seed <- seed_base + i
     if (verbose) message("🧪 Running simulation ", i, " (seed = ", seed, ")")
 
-    # 模拟数据集
+    # get top tier pathways with sufficient genes but unrelated pathways
     pathway_info <- as.list(select_diverse_top_pathways(hierarchy_table, pathway2gene, seed = seed))
     sim_data <- simulate_benchmark_dataset(
       pathway_info = pathway_info,
@@ -59,7 +59,7 @@ run_benchmark_simulations <- function(
     )
 
     # --- Conventional ---
-    conventional_result <- cpg2gene_enrichment(sim_data$ewas_data)
+    conventional_result <- cpg2gene_enrichment(sim_data$ewas_data, top_k = max(voting_params$k_values))
     eval_c <- benchmark_enrichment_results(
       result_df = conventional_result,
       truth_pathway_ids = sim_data$truth_pathway_ids,
@@ -85,6 +85,7 @@ run_benchmark_simulations <- function(
       min_vote_support = voting_params$min_vote_support,
       min_genes_per_hit = voting_params$min_genes_per_hit,
       databases = "Reactome",
+      readable = FALSE,
       verbose = FALSE
     )
 
@@ -146,16 +147,13 @@ cpg2gene_enrichment <- function(ewas_data,
 
   ann <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
 
-  # 2. 检查输入列名
   if (!rank_column %in% colnames(ewas_data)) {
     stop("Column '", rank_column, "' not found in ewas_data")
   }
 
-  # 3. 排序 CpG，支持绝对值排序
   ranking_values <- if (use_abs) abs(ewas_data[[rank_column]]) else ewas_data[[rank_column]]
   top_cpgs <- head(ewas_data$cpg[order(ranking_values, decreasing = rank_decreasing)], top_k)
 
-  # 4. 映射 gene symbol → entrez ID
   top_genes <- ann[top_cpgs, "UCSC_RefGene_Name"]
   gene_symbols <- unique(unlist(strsplit(na.omit(top_genes), ";")))
   gene_symbols <- gene_symbols[gene_symbols != ""]
@@ -166,14 +164,13 @@ cpg2gene_enrichment <- function(ewas_data,
                        keytype = "SYMBOL",
                        multiVals = "first")
 
-  # 5. 富集分析
   enrich_result <- enrichPathway(
     gene = entrez_ids,
     organism = "human",
     pvalueCutoff = 1,
     qvalueCutoff = 1,
     pAdjustMethod = "BH",
-    readable = TRUE
+    readable = FALSE
   )
 
   return(as.data.frame(enrich_result))
@@ -194,7 +191,6 @@ simulate_benchmark_dataset <- function(pathway_info,
                                        seed = 1029) {
   set.seed(seed)
 
-  # 初始化真路径 & gene
   truth_pathway_ids <- list()
   signal_entrez_genes <- c()
   signal_gene_map <- list()
@@ -217,13 +213,13 @@ simulate_benchmark_dataset <- function(pathway_info,
 
   signal_entrez_genes <- unique(signal_entrez_genes)
 
-  # ---- 筛选 signal CpG ----
+  # ---- screen signal CpG ----
   signal_subset <- eQTM_df[
     eQTM_df$entrez %in% signal_entrez_genes &
       eQTM_df$p_value <= p_value_threshold &
       abs(eQTM_df$statistics) >= correlation_threshold, ]
 
-  # ---- 每个 gene 只保留最多 n 个 CpG ----
+  # ---- each gene keep max n CpG ----
   signal_subset <- do.call(rbind, lapply(split(signal_subset, signal_subset$entrez), function(df) {
     if (nrow(df) <= n_per_gene) return(df)
     return(df[sample(nrow(df), n_per_gene), ])
@@ -233,7 +229,7 @@ simulate_benchmark_dataset <- function(pathway_info,
   noise_candidates <- setdiff(unique(eQTM_df$cpg), signal_cpgs)
   noise_cpgs <- sample(noise_candidates, min(n_noise, length(noise_candidates)))
 
-  # 打分
+  # score
   signal_scores <- abs(rnorm(length(signal_cpgs), mean = signal_score_mean, sd = signal_score_sd))
   noise_scores <- abs(rnorm(length(noise_cpgs), mean = noise_score_mean, sd = noise_score_sd))
 
@@ -256,7 +252,6 @@ simulate_benchmark_dataset <- function(pathway_info,
 }
 
 extract_pathways_by_level <- function(hierarchy_table, level, root) {
-  # 按层递推
   current <- root
   all_levels <- list()
   all_levels[[1]] <- current
@@ -269,7 +264,6 @@ extract_pathways_by_level <- function(hierarchy_table, level, root) {
 
   target_ids <- unique(unlist(all_levels[level]))
 
-  # 映射名称
   name_df <- as.data.frame(AnnotationDbi::toTable(reactome.db::reactomePATHID2NAME))
   names(target_ids) <- name_df$PATHNAME[match(target_ids, name_df$PATHID)]
 
@@ -283,7 +277,7 @@ sample_random_pathways_by_level <- function(hierarchy_table,
                                             seed = 1029) {
   set.seed(seed)
 
-  # ---- 辅助函数：判断某个 root 是否能走到指定层级 ----
+  # ---- decide how many layers of a pathway ----
   has_n_levels <- function(root_id, depth, hierarchy_table) {
     current <- root_id
     for (i in 2:depth) {
@@ -293,17 +287,14 @@ sample_random_pathways_by_level <- function(hierarchy_table,
     return(TRUE)
   }
 
-  # ---- 获取所有一级路径，并筛掉层级不足的 ----
+  # ---- get all top level pathways and filter ----
   all_root_ids <- unique(hierarchy_table$parent[!hierarchy_table$parent %in% hierarchy_table$child])
   root_ids <- Filter(function(pid) has_n_levels(pid, min_depth, hierarchy_table), all_root_ids)
 
-  # 随机选 n 个一级 pathway
   sampled_roots <- sample(root_ids, n_root)
 
-  # 名称映射表（避免 mapIds）
   name_df <- as.data.frame(AnnotationDbi::toTable(reactome.db::reactomePATHID2NAME))
 
-  # 构建结果
   pathway_info <- list()
 
   for (root_id in sampled_roots) {
@@ -466,7 +457,6 @@ select_diverse_top_pathways <- function(hierarchy_table, pathway2gene, n = 7, mi
     }
   }
 
-  # ---- 贪心随机选择 ----
   avg_jaccard <- rowMeans(jaccard_matrix)
   start_pool <- names(sort(avg_jaccard))[1:5]
   selected <- sample(start_pool, 1)
