@@ -3,7 +3,6 @@ run_benchmark_simulations <- function(
     seed_base = 20240407,
     hierarchy_table,
     pathway2gene,
-    eQTM_db,
     eQTM_db_PathwayVote,
     voting_params = list(
       k_values = seq(50, 450, 100),
@@ -48,7 +47,7 @@ run_benchmark_simulations <- function(
     sim_data <- simulate_benchmark_dataset(
       pathway_info = pathway_info,
       pathway2gene = pathway2gene,
-      eQTM_df = eQTM_db,
+      eQTM_df = getData(eQTM_db_PathwayVote),
       signal_genes_per_pathway = 25,
       n_noise = 10000,
       n_per_gene = 3,
