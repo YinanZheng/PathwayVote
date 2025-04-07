@@ -494,5 +494,3 @@ select_diverse_top_pathways <- function(hierarchy_table, pathway2gene, n = 7, mi
   return(top_ids[selected])
 }
 
-hierarchy_table <- readRDS("~/PathwayVote/reactome_hierarchy_table.RDS")
-pathway2gene <- readRDS("~/PathwayVote/reactome_pathway2gene.RDS")
