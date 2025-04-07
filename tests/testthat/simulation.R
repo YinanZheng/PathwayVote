@@ -221,7 +221,7 @@ simulate_benchmark_dataset <- function(pathway_info,
   signal_subset <- eQTM_df[
     eQTM_df$entrez %in% signal_entrez_genes &
       eQTM_df$p_value <= p_value_threshold &
-      abs(eQTM_df$correlation) >= correlation_threshold, ]
+      abs(eQTM_df$statistics) >= correlation_threshold, ]
 
   # ---- 每个 gene 只保留最多 n 个 CpG ----
   signal_subset <- do.call(rbind, lapply(split(signal_subset, signal_subset$entrez), function(df) {
