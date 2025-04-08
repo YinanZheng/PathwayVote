@@ -212,7 +212,3 @@ prune_pathways_by_vote <- function(enrich_results,
 
   return(pruned_results)
 }
-
-quiet <- function(x) {
-  suppressMessages(suppressWarnings(capture.output(x, type = "message")))
-}
