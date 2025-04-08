@@ -147,7 +147,16 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
   if (!inherits(current_plan, "multisession") || future::nbrOfWorkers() != workers) {
     future::plan(future::multisession, workers = workers)
   }
-  if (verbose) message("Using ", workers, " parallel workers.")
+
+  if (verbose) {
+    if (workers == 1) {
+      message("Using 1 worker (single-thread mode).")
+    } else if (is.null(user_specified_workers)) {
+      message("Using ", workers, " parallel workers (auto-detected).")
+    } else {
+      message("Using ", workers, " parallel workers (user-specified).")
+    }
+  }
 
   # ---- Input checks ----
   if (!inherits(eQTM, "eQTM")) stop("eQTM must be an eQTM object")
@@ -191,7 +200,14 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
   if (verbose) message(sprintf("Gene filtering completed. %d valid combinations retained.", valid_combination_count))
 
   # ---- Run enrichment analysis in parallel ----
-  if (verbose) message("Running enrichment analysis (parallel)...")
+  if (verbose) {
+    if (workers == 1) {
+      message("Running enrichment analysis (single thread)...")
+    } else {
+      message("Running enrichment analysis (parallel)...")
+    }
+  }
+
   enrich_results <- furrr::future_map(
     all_gene_sets,
     function(x) {
