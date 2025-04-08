@@ -31,8 +31,15 @@ filter_gene_lists <- function(eQTM, stat_grid, distance_grid, overlap_threshold 
       gene_list <- gene_list[!is.na(gene_list)]
       if (length(gene_list) == 0) next
 
-      gene_list_key <- paste(sort(gene_list), collapse = "_")
-      if (any(vapply(gene_lists, function(g) identical(sort(g), sort(gene_list)), logical(1)))) next
+      overlap_pass <- TRUE
+      for (existing in gene_lists) {
+        jaccard <- length(intersect(existing, gene_list)) / length(union(existing, gene_list))
+        if (jaccard >= overlap_threshold) {
+          overlap_pass <- FALSE
+          break
+        }
+      }
+      if (!overlap_pass) next
 
       if (verbose) {
         message(sprintf("  Accepted: %d genes, %d CpGs (stat > %.2f, dist < %d)",
@@ -50,6 +57,13 @@ filter_gene_lists <- function(eQTM, stat_grid, distance_grid, overlap_threshold 
   ))
 }
 
+harmonic_mean_p <- function(p_values) {
+  valid_p <- p_values[!is.na(p_values) & p_values >= 0 & p_values <= 1]
+  if (length(valid_p) == 0) return(1)
+  if (length(valid_p) == 1) return(valid_p[1])
+  return(length(valid_p) / sum(1 / valid_p))
+}
+
 combine_enrichment_results <- function(enrich_results, databases, verbose = FALSE) {
   if (verbose) message("Combining enrichment results...")
 
@@ -62,40 +76,55 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
   p_value_matrices <- list()
   for (db in databases) {
     if (verbose) message(sprintf("  Building p-value matrix for %s...", db))
-    p_value_matrices[[db]] <- matrix(NA, nrow = length(all_pathways[[db]]), ncol = length(enrich_results))
-    rownames(p_value_matrices[[db]]) <- all_pathways[[db]]
-    for (j in 1:length(enrich_results)) {
+    pathways <- all_pathways[[db]]
+    if (length(pathways) == 0 || all(is.na(pathways))) {
+      warning("No pathways found for database: ", db)
+      next
+    }
+
+    mat <- matrix(NA, nrow = length(pathways), ncol = length(enrich_results))
+    rownames(mat) <- pathways
+
+    for (j in seq_along(enrich_results)) {
       current_df <- enrich_results[[j]][[db]]
-      for (pathway in all_pathways[[db]]) {
-        p_value_matrices[[db]][pathway, j] <- ifelse(pathway %in% current_df$ID, current_df$pvalue[current_df$ID == pathway], 1)
+      for (pathway in pathways) {
+        mat[pathway, j] <- ifelse(pathway %in% current_df$ID,
+                                  current_df$pvalue[current_df$ID == pathway],
+                                  1)
       }
     }
-  }
-
-  harmonic_mean_p <- function(p_values) {
-    valid_p <- p_values[!is.na(p_values) & p_values >= 0 & p_values <= 1]
-    if (length(valid_p) == 0) return(1)
-    if (length(valid_p) == 1) return(valid_p[1])
-    return(length(valid_p) / sum(1 / valid_p))
+    p_value_matrices[[db]] <- mat
   }
 
   combined_p <- list()
   for (db in databases) {
-    if (verbose) message(sprintf("  Combining p-values for %s using HMP...", db))
-    combined_p[[db]] <- c()
-    for (pathway in all_pathways[[db]]) {
-      p_values <- p_value_matrices[[db]][pathway, ]
-      combined_p[[db]][pathway] <- harmonic_mean_p(p_values)
+    mat <- p_value_matrices[[db]]
+    if (is.null(mat) || nrow(mat) == 0) {
+      warning("Skipping database ", db, ": no p-values to combine.")
+      combined_p[[db]] <- numeric(0)
+      next
     }
-    combined_p[[db]] <- combined_p[[db]][order(combined_p[[db]])]
-    combined_p[[db]] <- p.adjust(combined_p[[db]], method = "BH")
+
+    if (verbose) message(sprintf("  Combining p-values for %s using HMP...", db))
+    combined_vec <- c()
+    for (pathway in rownames(mat)) {
+      combined_vec[pathway] <- harmonic_mean_p(mat[pathway, ])
+    }
+
+    if (length(combined_vec) == 0 || all(is.na(combined_vec))) {
+      warning("No valid combined p-values for database: ", db)
+      combined_p[[db]] <- numeric(0)
+    } else {
+      combined_vec <- combined_vec[order(combined_vec)]
+      combined_p[[db]] <- p.adjust(combined_vec, method = "BH")
+    }
   }
 
   pathway_info <- list()
   for (db in databases) {
     if (verbose) message(sprintf("  Collecting pathway info for %s...", db))
     pathway_info[[db]] <- list()
-    for (i in 1:length(enrich_results)) {
+    for (i in seq_along(enrich_results)) {
       if (nrow(enrich_results[[i]][[db]]) > 0) {
         df <- enrich_results[[i]][[db]][, c("ID", "Description", "geneID")]
         for (j in 1:nrow(df)) {
@@ -113,17 +142,24 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
   result_tables <- list()
   for (db in databases) {
     if (verbose) message(sprintf("  Generating result table for %s...", db))
+    if (length(combined_p[[db]]) == 0) {
+      result_tables[[db]] <- data.frame()
+      next
+    }
+
     pathway_df <- data.frame(
       ID = names(pathway_info[[db]]),
       Description = sapply(pathway_info[[db]], function(x) x$Description),
       geneID = sapply(pathway_info[[db]], function(x) paste(x$geneIDs, collapse = "/")),
       stringsAsFactors = FALSE
     )
+
     result_tables[[db]] <- data.frame(
       ID = names(combined_p[[db]]),
       p.adjust = combined_p[[db]],
       row.names = NULL
     )
+
     result_tables[[db]] <- merge(result_tables[[db]], pathway_df, by = "ID", all.x = TRUE)
     result_tables[[db]] <- result_tables[[db]][order(result_tables[[db]]$p.adjust), ]
   }
@@ -133,9 +169,24 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
 }
 
 prune_pathways_by_vote <- function(enrich_results,
-                                   min_vote_support = 2,
                                    min_genes = 2,
+                                   prune_strategy = c("cuberoot", "fixed"),
+                                   fixed_value = 3,
                                    verbose = TRUE) {
+  prune_strategy <- match.arg(prune_strategy)
+
+  n_runs <- length(enrich_results)
+  min_vote_support <- switch(
+    prune_strategy,
+    cuberoot = max(1, floor(n_runs^(1/3))),
+    fixed = fixed_value
+  )
+
+  if (verbose) {
+    message(sprintf("Using min_vote_support = %d (strategy = '%s', total runs = %d)",
+                    min_vote_support, prune_strategy, n_runs))
+  }
+
   all_hits <- unlist(lapply(enrich_results, function(x) {
     unlist(lapply(x, function(df) {
       if (is.null(df) || !"ID" %in% colnames(df) || !"Count" %in% colnames(df)) return(character(0))
@@ -162,3 +213,4 @@ prune_pathways_by_vote <- function(enrich_results,
 
   return(pruned_results)
 }
+

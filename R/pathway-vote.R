@@ -70,7 +70,8 @@ run_enrichment <- function(gene_list, databases, readable = FALSE, verbose = FAL
 #' @param rank_column A character string indicating which column in `ewas_data` to use for ranking.
 #' @param rank_decreasing Logical. If TRUE (default), sorts CpGs from high to low based on `rank_column`.
 #' @param use_abs Logical. Whether to apply `abs()` to the ranking column before sorting CpGs.
-#' @param min_vote_support Minimum number of enrichment combinations in which a pathway must appear to be retained.
+#' @param prune_strategy Character, either "cuberoot" or "fixed". If "cuberoot", the minimum vote support is computed as ⌊(N)^(1/3)⌋ where N is the number of enrichment combinations. If "fixed", uses the value provided by `fixed_value`.
+#' @param fixed_value Integer, used only if `prune_strategy = "fixed"`.
 #' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include to be considered.
 #' @param workers Optional integer. Number of parallel workers. If NULL, use 75\% of available logical cores.
 #' @param readable Logical. whether to convert Entrez IDs to gene symbols in enrichment results.
@@ -99,6 +100,7 @@ run_enrichment <- function(gene_list, databases, readable = FALSE, verbose = FAL
 #'   rank_column = "p_value",
 #'   rank_decreasing = FALSE,
 #'   use_abs = FALSE,
+#'   worker = 1, # If not specified, will use 75% of available cores
 #'   verbose = FALSE
 #' )
 #' }
@@ -110,7 +112,8 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
                          rank_column = "p_value",
                          rank_decreasing = FALSE,
                          use_abs = FALSE,
-                         min_vote_support = 3,
+                         prune_strategy = "cuberoot",
+                         fixed_value = 3,
                          min_genes_per_hit = 3,
                          readable = FALSE,
                          workers = NULL,
@@ -211,14 +214,15 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
   )
 
   # ---- Prune pathways by vote ----
-  enrich_results <- enrich_results[!vapply(enrich_results, is.null, logical(1))]
-  if (length(enrich_results) == 0) {
-    stop("All enrichment analyses failed.")
-  }
+  # enrich_results <- enrich_results[!vapply(enrich_results, is.null, logical(1))]
+  # if (length(enrich_results) == 0) {
+  #   stop("All enrichment analyses failed.")
+  # }
 
   enrich_results <- prune_pathways_by_vote(
     enrich_results,
-    min_vote_support = min_vote_support,
+    prune_strategy = prune_strategy,
+    fixed_value = fixed_value,
     min_genes = min_genes_per_hit,
     verbose = verbose
   )

@@ -15,7 +15,8 @@ pathway_vote(
   rank_column = "p_value",
   rank_decreasing = FALSE,
   use_abs = FALSE,
-  min_vote_support = 3,
+  prune_strategy = "cuberoot",
+  fixed_value = 3,
   min_genes_per_hit = 3,
   readable = FALSE,
   workers = NULL,
@@ -43,7 +44,9 @@ pathway_vote(
 
 \item{use_abs}{Logical. Whether to apply `abs()` to the ranking column before sorting CpGs.}
 
-\item{min_vote_support}{Minimum number of enrichment combinations in which a pathway must appear to be retained.}
+\item{prune_strategy}{Character, either "cuberoot" or "fixed". If "cuberoot", the minimum vote support is computed as ⌊(N)^(1/3)⌋ where N is the number of enrichment combinations. If "fixed", uses the value provided by `fixed_value`.}
+
+\item{fixed_value}{Integer, used only if `prune_strategy = "fixed"`.}
 
 \item{min_genes_per_hit}{Minimum number of genes (`Count`) a pathway must include to be considered.}
 
@@ -80,6 +83,7 @@ results <- pathway_vote(
   rank_column = "p_value",
   rank_decreasing = FALSE,
   use_abs = FALSE,
+  worker = 1, # If not specified, will use 75\% of available cores
   verbose = FALSE
 )
 }
