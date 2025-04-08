@@ -38,7 +38,6 @@ gene_filter <- function(eQTM, stat_threshold, distance) {
 #' @return A list with elements:
 #'   \itemize{
 #'     \item \code{gene_lists}: A list of gene vectors.
-#'     \item \code{cpg_gene_maps}: A list of CpG → gene mappings.
 #'     \item \code{params}: A list of parameter combinations used.
 #'   }
 #' @export
@@ -47,7 +46,6 @@ filter_gene_lists <- function(eQTM, stat_grid, distance_grid, overlap_threshold 
   data <- getData(eQTM)
 
   gene_lists <- list()
-  cpg_gene_maps <- list()
   params <- list()
 
   for (r in stat_grid) {
@@ -74,14 +72,12 @@ filter_gene_lists <- function(eQTM, stat_grid, distance_grid, overlap_threshold 
       }
 
       gene_lists[[length(gene_lists) + 1]] <- gene_list
-      cpg_gene_maps[[length(cpg_gene_maps) + 1]] <- map
       params[[length(params) + 1]] <- c(stat = r, d = d)
     }
   }
 
   return(list(
     gene_lists = gene_lists,
-    cpg_gene_maps = cpg_gene_maps,
     params = params
   ))
 }
@@ -232,7 +228,7 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
 #' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include in any enrichment result to be considered. Default = 3.
 #' @param readable Logical, whether to convert Entrez IDs to gene symbols in enrichment results. Default is FALSE to retain Entrez IDs (recommended for programmatic comparison).
 #' @param verbose Logical, whether to print progress messages.
-#' @return A list containing enrichment results and CpG-gene mappings.
+#' @return A list of enrichment results.
 #' @export
 pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
                          overlap_threshold, databases = c("Reactome"),
@@ -297,7 +293,6 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
 
       all_gene_sets[[length(all_gene_sets) + 1]] <- list(
         gene_list = gene_list_i,
-        cpg_gene_map = filtered_results$cpg_gene_maps[[i]],
         param = filtered_results$params[[i]],
         k = k
       )
@@ -335,8 +330,7 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
   )
 
   # ---- Combine and return results ----
-  cpg_gene_maps <- lapply(all_gene_sets, function(x) x$cpg_gene_map)
   result_tables <- combine_enrichment_results(enrich_results, databases, verbose = verbose)
-  return(list(result_tables = result_tables, cpg_gene_maps = cpg_gene_maps))
+  return(result_tables)
 }
 

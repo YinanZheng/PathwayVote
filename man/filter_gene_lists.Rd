@@ -27,7 +27,6 @@ filter_gene_lists(
 A list with elements:
   \itemize{
     \item \code{gene_lists}: A list of gene vectors.
-    \item \code{cpg_gene_maps}: A list of CpG → gene mappings.
     \item \code{params}: A list of parameter combinations used.
   }
 }

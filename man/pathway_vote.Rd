@@ -52,7 +52,7 @@ If FALSE, sorts from low to high. Use FALSE for p-values; TRUE for absolute stat
 \item{verbose}{Logical, whether to print progress messages.}
 }
 \value{
-A list containing enrichment results and CpG-gene mappings.
+A list of enrichment results.
 }
 \description{
 Performs pathway enrichment analysis using a voting-based approach on eQTM data.
