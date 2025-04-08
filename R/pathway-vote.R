@@ -132,6 +132,8 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
 
   # Set workers
   available_cores <- parallelly::availableCores(logical = TRUE)
+  user_specified_workers <- !is.null(workers)
+
   if (is.null(workers)) {
     # By default, use 75% of the cores, minimum 1 core
     workers <- max(1, floor(available_cores * 0.75))
