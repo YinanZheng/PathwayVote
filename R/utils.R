@@ -183,8 +183,7 @@ prune_pathways_by_vote <- function(enrich_results,
   )
 
   if (verbose) {
-    message(sprintf("Using min_vote_support = %d (strategy = '%s', total runs = %d)",
-                    min_vote_support, prune_strategy, n_runs))
+    message(sprintf("Prune strategy = '%s', total runs = %d", prune_strategy, n_runs))
   }
 
   all_hits <- unlist(lapply(enrich_results, function(x) {

@@ -214,11 +214,6 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
   )
 
   # ---- Prune pathways by vote ----
-  # enrich_results <- enrich_results[!vapply(enrich_results, is.null, logical(1))]
-  # if (length(enrich_results) == 0) {
-  #   stop("All enrichment analyses failed.")
-  # }
-
   enrich_results <- prune_pathways_by_vote(
     enrich_results,
     prune_strategy = prune_strategy,
