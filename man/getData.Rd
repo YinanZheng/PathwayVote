@@ -2,16 +2,19 @@
 % Please edit documentation in R/eQTM-class.R
 \name{getData}
 \alias{getData}
-\title{Get eQTM data}
+\alias{getData,eQTM-method}
+\title{Get eQTM Data}
 \usage{
 getData(object)
+
+\S4method{getData}{eQTM}(object)
 }
 \arguments{
 \item{object}{An eQTM object.}
 }
 \value{
-The data.frame stored in the eQTM object.
+A data.frame stored in the object.
 }
 \description{
-Get eQTM data
+Retrieve the eQTM data.frame from an eQTM object.
 }

@@ -103,18 +103,35 @@ create_eQTM <- function(data, metadata = list()) {
   return(eQTM_obj)
 }
 
-#' @title Get eQTM data
-#'
+#' @title Get eQTM Data
+#' @description Retrieve the eQTM data.frame from an eQTM object.
 #' @param object An eQTM object.
-#' @return The data.frame stored in the eQTM object.
+#' @return A data.frame stored in the object.
+#' @name getData
+#' @export
+NULL
+
+#' @title Get eQTM Metadata
+#' @description Retrieve the metadata list from an eQTM object.
+#' @param object An eQTM object.
+#' @return A list containing metadata.
+#' @name getMetadata
+#' @export
+NULL
+
+#' @rdname getData
 #' @export
 setGeneric("getData", function(object) standardGeneric("getData"))
+
+#' @rdname getData
+#' @export
 setMethod("getData", "eQTM", function(object) object@data)
 
-#' @title Get metadata
-#'
-#' @param object An eQTM object.
-#' @return The metadata list stored in the eQTM object.
+#' @rdname getMetadata
 #' @export
 setGeneric("getMetadata", function(object) standardGeneric("getMetadata"))
+
+#' @rdname getMetadata
+#' @export
 setMethod("getMetadata", "eQTM", function(object) object@metadata)
+

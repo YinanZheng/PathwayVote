@@ -1,7 +1,10 @@
 Package: PathwayVote
 Title: Pathway Enrichment Analysis Using eQTM Data
 Version: 0.1.0
-Authors@R: c(person("Yinan","Zheng", role = c("aut","cre"), email = "y-zheng@northwestern.edu", comment=c(ORCID="0000-0002-2006-7320")))
+Authors@R: c(person("Yinan", "Zheng", 
+                    email = "y-zheng@northwestern.edu", 
+                    role = c("aut", "cre"), 
+                    comment = c(ORCID = "0000-0002-2006-7320")))
 Description: A package for pathway enrichment analysis using eQTM data with a voting-based algorithm.
 License: MIT + file LICENSE
 Encoding: UTF-8
@@ -12,7 +15,11 @@ Imports:
     org.Hs.eg.db,
     ReactomePA,
     clusterProfiler,
-    AnnotationDbi
+    AnnotationDbi,
+    methods,
+    future,
+    furrr,
+    parallelly
 Suggests:
     testthat
 RoxygenNote: 7.3.2

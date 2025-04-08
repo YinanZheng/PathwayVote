@@ -2,16 +2,19 @@
 % Please edit documentation in R/eQTM-class.R
 \name{getMetadata}
 \alias{getMetadata}
-\title{Get metadata}
+\alias{getMetadata,eQTM-method}
+\title{Get eQTM Metadata}
 \usage{
 getMetadata(object)
+
+\S4method{getMetadata}{eQTM}(object)
 }
 \arguments{
 \item{object}{An eQTM object.}
 }
 \value{
-The metadata list stored in the eQTM object.
+A list containing metadata.
 }
 \description{
-Get metadata
+Retrieve the metadata list from an eQTM object.
 }
