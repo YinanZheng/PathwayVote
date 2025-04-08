@@ -55,9 +55,30 @@ setClass(
 #' @title Create an eQTM object
 #'
 #' @param data A data.frame containing eQTM data with columns: cpg, statistics, p_value, distance, and at least one of entrez or ensembl.
+#' \describe{
+#'   \item{cpg}{Character. CpG probe ID (e.g., "cg00000029"), representing a methylation site.}
+#'   \item{statistics}{Numeric. Test statistic from eQTM association analysis (e.g., correlation coefficient, r-square, regression coefficient, or t-statistic). Can be positive or negative.}
+#'   \item{p_value}{Numeric. P-value associated with the test statistic, must be between 0 and 1.}
+#'   \item{distance}{Numeric. Genomic distance (in base pairs) between the CpG and the associated gene's transcription start site (TSS). Must be non-negative.}
+#'   \item{entrez}{Character. Entrez gene ID of the associated gene. At least one of entrez or ensembl must be provided.}
+#'   \item{ensembl}{Character. Ensembl gene ID of the associated gene. At least one of entrez or ensembl must be provided.}
+#' }
 #' @param metadata A list of metadata (optional).
+#'
 #' @return An eQTM object.
+#'
+#' @examples
+#' data <- data.frame(
+#'   cpg = c("cg000001", "cg000002"),
+#'   statistics = c(2.5, -1.8),
+#'   p_value = c(0.01, 0.03),
+#'   distance = c(50000, 80000),
+#'   entrez = c("673", "1956")
+#' )
+#' eqtm_obj <- create_eQTM(data)
+#'
 #' @export
+#'
 create_eQTM <- function(data, metadata = list()) {
   if (!is.data.frame(data)) {
     stop("Input data must be a data.frame")
@@ -83,16 +104,35 @@ create_eQTM <- function(data, metadata = list()) {
 
   if (all(is.na(data$entrez)) && !all(is.na(data$ensembl))) {
     message("Converting Ensembl IDs to Entrez IDs and gene symbols...")
-    ensembl_to_entrez <- mapIds(org.Hs.eg.db, keys = data$ensembl, column = "ENTREZID", keytype = "ENSEMBL", multiVals = "first")
-    ensembl_to_symbol <- mapIds(org.Hs.eg.db, keys = data$ensembl, column = "SYMBOL", keytype = "ENSEMBL", multiVals = "first")
+
+    suppressWarnings({
+      ensembl_to_entrez <- mapIds(org.Hs.eg.db, keys = data$ensembl, column = "ENTREZID", keytype = "ENSEMBL", multiVals = "first")
+      ensembl_to_symbol <- mapIds(org.Hs.eg.db, keys = data$ensembl, column = "SYMBOL", keytype = "ENSEMBL", multiVals = "first")
+    })
+
     data$entrez <- ensembl_to_entrez[match(data$ensembl, names(ensembl_to_entrez))]
     data$gene <- ensembl_to_symbol[match(data$ensembl, names(ensembl_to_symbol))]
+
+    n_missing <- sum(is.na(data$entrez))
+    if (n_missing > 0) {
+      warning(sprintf("Entrez ID conversion failed for %d Ensembl IDs (%.2f%%).", n_missing, 100 * n_missing / nrow(data)))
+    }
+
   } else if (all(is.na(data$ensembl)) && !all(is.na(data$entrez))) {
     message("Converting Entrez IDs to Ensembl IDs and gene symbols...")
-    entrez_to_ensembl <- mapIds(org.Hs.eg.db, keys = data$entrez, column = "ENSEMBL", keytype = "ENTREZID", multiVals = "first")
-    entrez_to_symbol <- mapIds(org.Hs.eg.db, keys = data$entrez, column = "SYMBOL", keytype = "ENTREZID", multiVals = "first")
+
+    suppressWarnings({
+      entrez_to_ensembl <- mapIds(org.Hs.eg.db, keys = data$entrez, column = "ENSEMBL", keytype = "ENTREZID", multiVals = "first")
+      entrez_to_symbol <- mapIds(org.Hs.eg.db, keys = data$entrez, column = "SYMBOL", keytype = "ENTREZID", multiVals = "first")
+    })
+
     data$ensembl <- entrez_to_ensembl[match(data$entrez, names(entrez_to_ensembl))]
     data$gene <- entrez_to_symbol[match(data$entrez, names(entrez_to_symbol))]
+
+    n_missing <- sum(is.na(data$ensembl))
+    if (n_missing > 0) {
+      warning(sprintf("Ensembl ID conversion failed for %d Entrez IDs (%.2f%%).", n_missing, 100 * n_missing / nrow(data)))
+    }
   } else {
     # Both provided: do nothing
     message("Using provided Ensembl and Entrez IDs without conversion.")

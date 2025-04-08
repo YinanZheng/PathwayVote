@@ -18,6 +18,7 @@ pathway_vote(
   min_vote_support = 3,
   min_genes_per_hit = 3,
   readable = FALSE,
+  workers = NULL,
   verbose = FALSE
 )
 }
@@ -36,24 +37,51 @@ pathway_vote(
 
 \item{databases}{A character vector of pathway databases (e.g., "Reactome").}
 
-\item{rank_column}{A character string indicating which column in `ewas_data` to use for ranking (default: "p_value").}
+\item{rank_column}{A character string indicating which column in `ewas_data` to use for ranking.}
 
-\item{rank_decreasing}{Logical. If TRUE (default), sorts CpGs from high to low based on `rank_column`.
-If FALSE, sorts from low to high. Use FALSE for p-values; TRUE for absolute statistics.}
+\item{rank_decreasing}{Logical. If TRUE (default), sorts CpGs from high to low based on `rank_column`.}
 
-\item{use_abs}{Logical. Whether to apply `abs()` to the ranking column (e.g., p-value, correlation, score) before sorting CpGs.}
+\item{use_abs}{Logical. Whether to apply `abs()` to the ranking column before sorting CpGs.}
 
-\item{min_vote_support}{Minimum number of enrichment combinations in which a pathway must appear to be retained. Default = 3.}
+\item{min_vote_support}{Minimum number of enrichment combinations in which a pathway must appear to be retained.}
 
-\item{min_genes_per_hit}{Minimum number of genes (`Count`) a pathway must include in any enrichment result to be considered. Default = 3.}
+\item{min_genes_per_hit}{Minimum number of genes (`Count`) a pathway must include to be considered.}
 
-\item{readable}{Logical, whether to convert Entrez IDs to gene symbols in enrichment results. Default is FALSE to retain Entrez IDs (recommended for programmatic comparison).}
+\item{readable}{Logical. whether to convert Entrez IDs to gene symbols in enrichment results.}
 
-\item{verbose}{Logical, whether to print progress messages.}
+\item{workers}{Optional integer. Number of parallel workers. If NULL, use 75\% of available logical cores.}
+
+\item{verbose}{Logical. whether to print progress messages.}
 }
 \value{
-A list of enrichment results.
+A named list of data.frames, each containing enrichment results (pathway ID, p.adjust, Description, geneID) for one database (e.g., Reactome, KEGG).
 }
 \description{
 Performs pathway enrichment analysis using a voting-based approach on eQTM data.
+}
+\examples{
+data <- data.frame(
+  cpg = c("cg000001", "cg000002", "cg000003"),
+  statistics = c(2.5, -1.8, 3.2),
+  p_value = c(0.01, 0.03, 0.005),
+  distance = c(50000, 80000, 30000),
+  entrez = c("673", "1956", "5290")
+)
+eqtm_obj <- create_eQTM(data)
+\dontrun{
+results <- pathway_vote(
+  ewas_data = data,
+  eQTM = eqtm_obj,
+  k_values = c(2),
+  stat_grid = c(1.5),
+  distance_grid = c(1e5),
+  overlap_threshold = 0.3,
+  databases = c("KEGG"),
+  rank_column = "p_value",
+  rank_decreasing = FALSE,
+  use_abs = FALSE,
+  verbose = FALSE
+)
+}
+
 }

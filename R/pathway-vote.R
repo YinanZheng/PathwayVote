@@ -8,19 +8,28 @@
 #' @importFrom org.Hs.eg.db org.Hs.eg.db
 #' @import dplyr
 
-#' @title Run Enrichment Analysis on Gene Lists
+#' @title Run Enrichment Analysis on Human Gene Lists
 #'
-#' @description Performs pathway enrichment analysis on a gene list using specified databases.
+#' @description Performs pathway enrichment analysis on a gene list using specified databases (Reactome, GO, KEGG, can be run at the same time).
+#'
 #' @param gene_list Character vector of Entrez IDs.
 #' @param databases Character vector of databases (e.g., "Reactome", "GO", "KEGG").
-#' @param r Numeric, statistics threshold used for filtering.
-#' @param d Numeric, distance threshold used for filtering.
 #' @param readable Logical, whether to convert Entrez IDs to gene symbols in enrichment results. Default is FALSE to retain Entrez IDs (recommended for programmatic comparison).
 #' @param verbose Logical, whether to print progress messages.
+#'
 #' @return A list of enrichment results for each database.
+#'
+#' @examples
+#' \dontrun{
+#' # A simple KEGG enrichment example
+#' gene_list <- c("673", "1956", "5290")  # Entrez IDs for BRAF, EGFR, PIK3CA
+#' result <- run_enrichment(gene_list, databases = c("KEGG"), readable = TRUE)
+#' print(result$KEGG)
+#' }
+#'
 #' @export
-run_enrichment <- function(gene_list, databases, r, d, readable = FALSE, verbose = FALSE) {
-  if (verbose) message(sprintf("Running enrichment for statistics threshold = %.2f, d = %d", r, d))
+#'
+run_enrichment <- function(gene_list, databases, readable = FALSE, verbose = FALSE) {
   enrich_results <- list()
   if ("Reactome" %in% databases) {
     if (verbose) message("  Analyzing Reactome...")
@@ -50,6 +59,7 @@ run_enrichment <- function(gene_list, databases, r, d, readable = FALSE, verbose
 #' @title Pathway Vote Algorithm for eQTM Data (Auto Parallel)
 #'
 #' @description Performs pathway enrichment analysis using a voting-based approach on eQTM data.
+#'
 #' @param ewas_data A data.frame with columns: cpg and a ranking column (e.g., p_value, score).
 #' @param eQTM An eQTM object containing eQTM data.
 #' @param k_values A numeric vector of top k CpGs to select (e.g., c(10, 50, 100)).
@@ -57,16 +67,44 @@ run_enrichment <- function(gene_list, databases, r, d, readable = FALSE, verbose
 #' @param distance_grid A numeric vector of distance thresholds.
 #' @param overlap_threshold A numeric value for gene list overlap threshold.
 #' @param databases A character vector of pathway databases (e.g., "Reactome").
-#' @param rank_column A character string indicating which column in `ewas_data` to use for ranking (default: "p_value").
+#' @param rank_column A character string indicating which column in `ewas_data` to use for ranking.
 #' @param rank_decreasing Logical. If TRUE (default), sorts CpGs from high to low based on `rank_column`.
-#'                        If FALSE, sorts from low to high. Use FALSE for p-values; TRUE for absolute statistics.
-#' @param use_abs Logical. Whether to apply `abs()` to the ranking column (e.g., p-value, correlation, score) before sorting CpGs.
-#' @param min_vote_support Minimum number of enrichment combinations in which a pathway must appear to be retained. Default = 3.
-#' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include in any enrichment result to be considered. Default = 3.
-#' @param readable Logical, whether to convert Entrez IDs to gene symbols in enrichment results. Default is FALSE to retain Entrez IDs (recommended for programmatic comparison).
-#' @param verbose Logical, whether to print progress messages.
-#' @return A list of enrichment results.
+#' @param use_abs Logical. Whether to apply `abs()` to the ranking column before sorting CpGs.
+#' @param min_vote_support Minimum number of enrichment combinations in which a pathway must appear to be retained.
+#' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include to be considered.
+#' @param workers Optional integer. Number of parallel workers. If NULL, use 75\% of available logical cores.
+#' @param readable Logical. whether to convert Entrez IDs to gene symbols in enrichment results.
+#' @param verbose Logical. whether to print progress messages.
+#'
+#' @return A named list of data.frames, each containing enrichment results (pathway ID, p.adjust, Description, geneID) for one database (e.g., Reactome, KEGG).
+#'
+#' @examples
+#' data <- data.frame(
+#'   cpg = c("cg000001", "cg000002", "cg000003"),
+#'   statistics = c(2.5, -1.8, 3.2),
+#'   p_value = c(0.01, 0.03, 0.005),
+#'   distance = c(50000, 80000, 30000),
+#'   entrez = c("673", "1956", "5290")
+#' )
+#' eqtm_obj <- create_eQTM(data)
+#' \dontrun{
+#' results <- pathway_vote(
+#'   ewas_data = data,
+#'   eQTM = eqtm_obj,
+#'   k_values = c(2),
+#'   stat_grid = c(1.5),
+#'   distance_grid = c(1e5),
+#'   overlap_threshold = 0.3,
+#'   databases = c("KEGG"),
+#'   rank_column = "p_value",
+#'   rank_decreasing = FALSE,
+#'   use_abs = FALSE,
+#'   verbose = FALSE
+#' )
+#' }
+#'
 #' @export
+#'
 pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
                          overlap_threshold, databases = c("Reactome"),
                          rank_column = "p_value",
@@ -75,6 +113,7 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
                          min_vote_support = 3,
                          min_genes_per_hit = 3,
                          readable = FALSE,
+                         workers = NULL,
                          verbose = FALSE) {
 
   # ---- Load and setup parallel environment ----
@@ -88,14 +127,24 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
     lapply(required_pkgs, library, character.only = TRUE)
   })
 
+  # Set workers
   available_cores <- parallelly::availableCores(logical = TRUE)
-  max_safe_workers <- floor(min(available_cores, parallelly::availableCores("system")) * 0.75)
-  max_safe_workers <- max(1, max_safe_workers)
-
-  if (!inherits(future::plan(), "multisession")) {
-    future::plan(future::multisession, workers = max_safe_workers)
+  if (is.null(workers)) {
+    # By default, use 75% of the cores, minimum 1 core
+    workers <- max(1, floor(available_cores * 0.75))
+  } else {
+    if (!is.numeric(workers) || length(workers) != 1 || workers < 1) {
+      stop("`workers` must be a positive integer")
+    }
+    workers <- min(workers, available_cores)
   }
-  if (verbose) message("Using ", max_safe_workers, " parallel workers.")
+
+  # Set future plan
+  current_plan <- future::plan()
+  if (!inherits(current_plan, "multisession") || future::nbrOfWorkers() != workers) {
+    future::plan(future::multisession, workers = workers)
+  }
+  if (verbose) message("Using ", workers, " parallel workers.")
 
   # ---- Input checks ----
   if (!inherits(eQTM, "eQTM")) stop("eQTM must be an eQTM object")
@@ -143,14 +192,17 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
   enrich_results <- furrr::future_map(
     all_gene_sets,
     function(x) {
-      run_enrichment(
-        gene_list = x$gene_list,
-        databases = databases,
-        r = x$param["stat"],
-        d = x$param["d"],
-        readable = readable,
-        verbose = verbose
-      )
+      tryCatch({
+        run_enrichment(
+          gene_list = x$gene_list,
+          databases = databases,
+          readable = readable,
+          verbose = verbose
+        )
+      }, error = function(e) {
+        warning("Enrichment failed for one gene list: ", conditionMessage(e))
+        return(NULL)
+      })
     },
     .options = furrr::furrr_options(
       seed = TRUE,
@@ -159,6 +211,11 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
   )
 
   # ---- Prune pathways by vote ----
+  enrich_results <- enrich_results[!vapply(enrich_results, is.null, logical(1))]
+  if (length(enrich_results) == 0) {
+    stop("All enrichment analyses failed.")
+  }
+
   enrich_results <- prune_pathways_by_vote(
     enrich_results,
     min_vote_support = min_vote_support,

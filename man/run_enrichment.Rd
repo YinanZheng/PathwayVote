@@ -2,18 +2,14 @@
 % Please edit documentation in R/pathway-vote.R
 \name{run_enrichment}
 \alias{run_enrichment}
-\title{Run Enrichment Analysis on Gene Lists}
+\title{Run Enrichment Analysis on Human Gene Lists}
 \usage{
-run_enrichment(gene_list, databases, r, d, readable = FALSE, verbose = FALSE)
+run_enrichment(gene_list, databases, readable = FALSE, verbose = FALSE)
 }
 \arguments{
 \item{gene_list}{Character vector of Entrez IDs.}
 
 \item{databases}{Character vector of databases (e.g., "Reactome", "GO", "KEGG").}
-
-\item{r}{Numeric, statistics threshold used for filtering.}
-
-\item{d}{Numeric, distance threshold used for filtering.}
 
 \item{readable}{Logical, whether to convert Entrez IDs to gene symbols in enrichment results. Default is FALSE to retain Entrez IDs (recommended for programmatic comparison).}
 
@@ -23,5 +19,14 @@ run_enrichment(gene_list, databases, r, d, readable = FALSE, verbose = FALSE)
 A list of enrichment results for each database.
 }
 \description{
-Performs pathway enrichment analysis on a gene list using specified databases.
+Performs pathway enrichment analysis on a gene list using specified databases (Reactome, GO, KEGG, can be run at the same time).
+}
+\examples{
+\dontrun{
+# A simple KEGG enrichment example
+gene_list <- c("673", "1956", "5290")  # Entrez IDs for BRAF, EGFR, PIK3CA
+result <- run_enrichment(gene_list, databases = c("KEGG"), readable = TRUE)
+print(result$KEGG)
+}
+
 }
