@@ -132,9 +132,9 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
 
   # Set workers
   available_cores <- parallelly::availableCores(logical = TRUE)
-  user_specified_workers <- !is.null(workers)
 
   if (is.null(workers)) {
+    user_specified_workers = FALSE
     # By default, use 75% of the cores, minimum 1 core
     workers <- max(1, floor(available_cores * 0.75))
   } else {
@@ -142,6 +142,7 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
       stop("`workers` must be a positive integer")
     }
     workers <- min(workers, available_cores)
+    user_specified_workers = TRUE
   }
 
   # Set future plan
@@ -153,7 +154,7 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
   if (verbose) {
     if (workers == 1) {
       message("Using 1 worker (single-thread mode).")
-    } else if (is.null(user_specified_workers)) {
+    } else if (!user_specified_workers) {
       message("Using ", workers, " parallel workers (auto-detected).")
     } else {
       message("Using ", workers, " parallel workers (user-specified).")
