@@ -44,7 +44,7 @@ pathway_vote(
 
 \item{use_abs}{Logical. Whether to apply `abs()` to the ranking column before sorting CpGs.}
 
-\item{prune_strategy}{Character, either "cuberoot" or "fixed". If "cuberoot", the minimum vote support is computed as ⌊(N)^(1/3)⌋ where N is the number of enrichment combinations. If "fixed", uses the value provided by `fixed_value`.}
+\item{prune_strategy}{Character, either "cuberoot" or "fixed". If "cuberoot", the minimum vote support is computed as (N)^(1/3) where N is the number of enrichment combinations. If "fixed", uses the value provided by `fixed_value`.}
 
 \item{fixed_value}{Integer, used only if `prune_strategy = "fixed"`.}
 

@@ -5,7 +5,7 @@ Authors@R: c(person("Yinan", "Zheng",
                     email = "y-zheng@northwestern.edu", 
                     role = c("aut", "cre"), 
                     comment = c(ORCID = "0000-0002-2006-7320")))
-Description: A package for pathway enrichment analysis using eQTM data with a voting-based algorithm.
+Description: Methylation pathway enrichment analysis using expression quantitative trait methylation data with a voting-based algorithm.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends:

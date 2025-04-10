@@ -8,54 +8,6 @@
 #' @importFrom org.Hs.eg.db org.Hs.eg.db
 #' @import dplyr
 
-#' @title Run Enrichment Analysis on Human Gene Lists
-#'
-#' @description Performs pathway enrichment analysis on a gene list using specified databases (Reactome, GO, KEGG, can be run at the same time).
-#'
-#' @param gene_list Character vector of Entrez IDs.
-#' @param databases Character vector of databases (e.g., "Reactome", "GO", "KEGG").
-#' @param readable Logical, whether to convert Entrez IDs to gene symbols in enrichment results. Default is FALSE to retain Entrez IDs (recommended for programmatic comparison).
-#' @param verbose Logical, whether to print progress messages.
-#'
-#' @return A list of enrichment results for each database.
-#'
-#' @examples
-#' \dontrun{
-#' # A simple KEGG enrichment example
-#' gene_list <- c("673", "1956", "5290")  # Entrez IDs for BRAF, EGFR, PIK3CA
-#' result <- run_enrichment(gene_list, databases = c("KEGG"), readable = TRUE)
-#' print(result$KEGG)
-#' }
-#'
-#' @export
-#'
-run_enrichment <- function(gene_list, databases, readable = FALSE, verbose = FALSE) {
-  enrich_results <- list()
-  if ("Reactome" %in% databases) {
-    if (verbose) message("  Analyzing Reactome...")
-    enrich_results$Reactome <- as.data.frame(
-      enrichPathway(gene = gene_list, organism = "human", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH", readable = readable)
-    )
-  }
-  if ("GO" %in% databases) {
-    if (verbose) message("  Analyzing GO...")
-    enrich_results$GO <- as.data.frame(
-      enrichGO(gene = gene_list, OrgDb = org.Hs.eg.db, ont = "ALL", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH", readable = readable)
-    )
-  }
-  if ("KEGG" %in% databases) {
-    if (verbose) message("  Analyzing KEGG...")
-    kegg_enrich <- enrichKEGG(gene = gene_list, organism = "hsa", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH")
-    if (readable) {
-      kegg_enrich <- setReadable(kegg_enrich, OrgDb = org.Hs.eg.db, keyType = "ENTREZID")
-    }
-    enrich_results$KEGG <- as.data.frame(kegg_enrich)
-  }
-  if (verbose) message("  Enrichment completed.")
-  return(enrich_results)
-}
-
-
 #' @title Pathway Vote Algorithm for eQTM Data (Auto Parallel)
 #'
 #' @description Performs pathway enrichment analysis using a voting-based approach on eQTM data.
@@ -70,7 +22,7 @@ run_enrichment <- function(gene_list, databases, readable = FALSE, verbose = FAL
 #' @param rank_column A character string indicating which column in `ewas_data` to use for ranking.
 #' @param rank_decreasing Logical. If TRUE (default), sorts CpGs from high to low based on `rank_column`.
 #' @param use_abs Logical. Whether to apply `abs()` to the ranking column before sorting CpGs.
-#' @param prune_strategy Character, either "cuberoot" or "fixed". If "cuberoot", the minimum vote support is computed as ⌊(N)^(1/3)⌋ where N is the number of enrichment combinations. If "fixed", uses the value provided by `fixed_value`.
+#' @param prune_strategy Character, either "cuberoot" or "fixed". If "cuberoot", the minimum vote support is computed as (N)^(1/3) where N is the number of enrichment combinations. If "fixed", uses the value provided by `fixed_value`.
 #' @param fixed_value Integer, used only if `prune_strategy = "fixed"`.
 #' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include to be considered.
 #' @param workers Optional integer. Number of parallel workers. If NULL, use 75\% of available logical cores.
