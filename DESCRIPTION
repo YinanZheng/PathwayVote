@@ -1,11 +1,11 @@
 Package: PathwayVote
-Title: Pathway Enrichment Analysis Using eQTM Data
+Title: Robust Pathway Enrichment for DNA Methylation Studies Using Ensemble Voting
 Version: 0.1.0
 Authors@R: c(person("Yinan", "Zheng", 
                     email = "y-zheng@northwestern.edu", 
                     role = c("aut", "cre"), 
                     comment = c(ORCID = "0000-0002-2006-7320")))
-Description: Methylation pathway enrichment analysis using expression quantitative trait methylation data with a voting-based algorithm.
+Description: Implements a robust, voting-based pathway enrichment method designed for DNA methylation data analysis. The algorithm allows the input of expression quantitative trait methylation (eQTM) data to aggregates pathway signals across multiple parameter settings, and selects pathways supported across combinations using a vote-pruning strategy.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends:

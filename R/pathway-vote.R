@@ -25,7 +25,7 @@
 #' @param prune_strategy Character, either "cuberoot" or "fixed". If "cuberoot", the minimum vote support is computed as (N)^(1/3) where N is the number of enrichment combinations. If "fixed", uses the value provided by `fixed_value`.
 #' @param fixed_value Integer, used only if `prune_strategy = "fixed"`.
 #' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include to be considered.
-#' @param workers Optional integer. Number of parallel workers. If NULL, use 75\% of available logical cores.
+#' @param workers Optional integer. Number of parallel workers. If NULL, use 2 logical cores by default.
 #' @param readable Logical. whether to convert Entrez IDs to gene symbols in enrichment results.
 #' @param verbose Logical. whether to print progress messages.
 #'
@@ -40,7 +40,7 @@
 #'   entrez = c("673", "1956", "5290")
 #' )
 #' eqtm_obj <- create_eQTM(data)
-#' \dontrun{
+#' \donttest{
 #' results <- pathway_vote(
 #'   ewas_data = data,
 #'   eQTM = eqtm_obj,
@@ -52,7 +52,7 @@
 #'   rank_column = "p_value",
 #'   rank_decreasing = FALSE,
 #'   use_abs = FALSE,
-#'   worker = 1, # If not specified, will use 75% of available cores
+#'   worker = 1, # If not specified, will use 2 cores by default
 #'   verbose = FALSE
 #' )
 #' }
@@ -87,8 +87,8 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
 
   if (is.null(workers)) {
     user_specified_workers = FALSE
-    # By default, use 75% of the cores, minimum 1 core
-    workers <- max(1, floor(available_cores * 0.75))
+    # By default, use 2 cores per CRAN's requirement
+    workers <- min(workers, 2)
   } else {
     if (!is.numeric(workers) || length(workers) != 1 || workers < 1) {
       stop("`workers` must be a positive integer")

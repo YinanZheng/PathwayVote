@@ -52,7 +52,7 @@ pathway_vote(
 
 \item{readable}{Logical. whether to convert Entrez IDs to gene symbols in enrichment results.}
 
-\item{workers}{Optional integer. Number of parallel workers. If NULL, use 75\% of available logical cores.}
+\item{workers}{Optional integer. Number of parallel workers. If NULL, use 2 logical cores by default.}
 
 \item{verbose}{Logical. whether to print progress messages.}
 }
@@ -71,7 +71,7 @@ data <- data.frame(
   entrez = c("673", "1956", "5290")
 )
 eqtm_obj <- create_eQTM(data)
-\dontrun{
+\donttest{
 results <- pathway_vote(
   ewas_data = data,
   eQTM = eqtm_obj,
@@ -83,7 +83,7 @@ results <- pathway_vote(
   rank_column = "p_value",
   rank_decreasing = FALSE,
   use_abs = FALSE,
-  worker = 1, # If not specified, will use 75\% of available cores
+  worker = 1, # If not specified, will use 2 cores by default
   verbose = FALSE
 )
 }
