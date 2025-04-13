@@ -2,15 +2,16 @@
 % Please edit documentation in R/pathway-vote.R
 \name{pathway_vote}
 \alias{pathway_vote}
-\title{Pathway Vote Algorithm for eQTM Data (Auto Parallel)}
+\title{Pathway Vote}
 \usage{
 pathway_vote(
   ewas_data,
   eQTM,
-  k_values,
-  stat_grid,
-  distance_grid,
-  overlap_threshold,
+  k_grid = NULL,
+  stat_grid = NULL,
+  distance_grid = NULL,
+  overlap_threshold = NULL,
+  grid_size = 5,
   databases = c("Reactome"),
   rank_column = "p_value",
   rank_decreasing = FALSE,
@@ -28,13 +29,15 @@ pathway_vote(
 
 \item{eQTM}{An eQTM object containing eQTM data.}
 
-\item{k_values}{A numeric vector of top k CpGs to select (e.g., c(10, 50, 100)).}
+\item{k_grid}{A numeric vector of top k CpGs to select. If NULL, inferred automatically.}
 
-\item{stat_grid}{A numeric vector of statistics thresholds.}
+\item{stat_grid}{A numeric vector of statistics thresholds. If NULL, inferred automatically.}
 
-\item{distance_grid}{A numeric vector of distance thresholds.}
+\item{distance_grid}{A numeric vector of distance thresholds. If NULL, inferred automatically.}
 
-\item{overlap_threshold}{A numeric value for gene list overlap threshold.}
+\item{overlap_threshold}{A numeric value for gene list overlap threshold. If NULL, inferred automatically.}
+
+\item{grid_size}{Integer. Number of values in each grid when auto-generating. Default is 5.}
 
 \item{databases}{A character vector of pathway databases (e.g., "Reactome").}
 
@@ -44,7 +47,7 @@ pathway_vote(
 
 \item{use_abs}{Logical. Whether to apply `abs()` to the ranking column before sorting CpGs.}
 
-\item{prune_strategy}{Character, either "cuberoot" or "fixed". If "cuberoot", the minimum vote support is computed as (N)^(1/3) where N is the number of enrichment combinations. If "fixed", uses the value provided by `fixed_value`.}
+\item{prune_strategy}{Character, either "cuberoot" or "fixed".}
 
 \item{fixed_value}{Integer, used only if `prune_strategy = "fixed"`.}
 
@@ -52,7 +55,7 @@ pathway_vote(
 
 \item{readable}{Logical. whether to convert Entrez IDs to gene symbols in enrichment results.}
 
-\item{workers}{Optional integer. Number of parallel workers. If NULL, use 2 logical cores by default.}
+\item{workers}{Optional integer. Number of parallel workers. If NULL, use 75% of available logical cores.}
 
 \item{verbose}{Logical. whether to print progress messages.}
 }
@@ -60,7 +63,7 @@ pathway_vote(
 A named list of data.frames, each containing enrichment results (pathway ID, p.adjust, Description, geneID) for one database (e.g., Reactome, KEGG).
 }
 \description{
-Performs pathway enrichment analysis using a voting-based approach on eQTM data.
+Performs methylation pathway enrichment analysis using a voting-based approach.
 }
 \examples{
 data <- data.frame(
@@ -75,10 +78,6 @@ eqtm_obj <- create_eQTM(data)
 results <- pathway_vote(
   ewas_data = data,
   eQTM = eqtm_obj,
-  k_values = c(2),
-  stat_grid = c(1.5),
-  distance_grid = c(1e5),
-  overlap_threshold = 0.3,
   databases = c("KEGG"),
   rank_column = "p_value",
   rank_decreasing = FALSE,

@@ -8,24 +8,25 @@
 #' @importFrom org.Hs.eg.db org.Hs.eg.db
 #' @import dplyr
 
-#' @title Pathway Vote Algorithm for eQTM Data (Auto Parallel)
+#' @title Pathway Vote
 #'
-#' @description Performs pathway enrichment analysis using a voting-based approach on eQTM data.
+#' @description Performs methylation pathway enrichment analysis using a voting-based approach.
 #'
 #' @param ewas_data A data.frame with columns: cpg and a ranking column (e.g., p_value, score).
 #' @param eQTM An eQTM object containing eQTM data.
-#' @param k_values A numeric vector of top k CpGs to select (e.g., c(10, 50, 100)).
-#' @param stat_grid A numeric vector of statistics thresholds.
-#' @param distance_grid A numeric vector of distance thresholds.
-#' @param overlap_threshold A numeric value for gene list overlap threshold.
+#' @param k_grid A numeric vector of top k CpGs to select. If NULL, inferred automatically.
+#' @param stat_grid A numeric vector of statistics thresholds. If NULL, inferred automatically.
+#' @param distance_grid A numeric vector of distance thresholds. If NULL, inferred automatically.
+#' @param overlap_threshold A numeric value for gene list overlap threshold. If NULL, inferred automatically.
+#' @param grid_size Integer. Number of values in each grid when auto-generating. Default is 5.
 #' @param databases A character vector of pathway databases (e.g., "Reactome").
 #' @param rank_column A character string indicating which column in `ewas_data` to use for ranking.
 #' @param rank_decreasing Logical. If TRUE (default), sorts CpGs from high to low based on `rank_column`.
 #' @param use_abs Logical. Whether to apply `abs()` to the ranking column before sorting CpGs.
-#' @param prune_strategy Character, either "cuberoot" or "fixed". If "cuberoot", the minimum vote support is computed as (N)^(1/3) where N is the number of enrichment combinations. If "fixed", uses the value provided by `fixed_value`.
+#' @param prune_strategy Character, either "cuberoot" or "fixed".
 #' @param fixed_value Integer, used only if `prune_strategy = "fixed"`.
 #' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include to be considered.
-#' @param workers Optional integer. Number of parallel workers. If NULL, use 2 logical cores by default.
+#' @param workers Optional integer. Number of parallel workers. If NULL, use 75% of available logical cores.
 #' @param readable Logical. whether to convert Entrez IDs to gene symbols in enrichment results.
 #' @param verbose Logical. whether to print progress messages.
 #'
@@ -44,10 +45,6 @@
 #' results <- pathway_vote(
 #'   ewas_data = data,
 #'   eQTM = eqtm_obj,
-#'   k_values = c(2),
-#'   stat_grid = c(1.5),
-#'   distance_grid = c(1e5),
-#'   overlap_threshold = 0.3,
 #'   databases = c("KEGG"),
 #'   rank_column = "p_value",
 #'   rank_decreasing = FALSE,
@@ -59,8 +56,13 @@
 #'
 #' @export
 #'
-pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
-                         overlap_threshold, databases = c("Reactome"),
+pathway_vote <- function(ewas_data, eQTM,
+                         k_grid = NULL,
+                         stat_grid = NULL,
+                         distance_grid = NULL,
+                         overlap_threshold = NULL,
+                         grid_size = 5,
+                         databases = c("Reactome"),
                          rank_column = "p_value",
                          rank_decreasing = FALSE,
                          use_abs = FALSE,
@@ -71,7 +73,6 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
                          workers = NULL,
                          verbose = FALSE) {
 
-  # ---- Load and setup parallel environment ----
   required_pkgs <- c("PathwayVote", "furrr", "future", "ReactomePA", "clusterProfiler", "org.Hs.eg.db")
   lapply(required_pkgs, function(pkg) {
     if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -82,65 +83,69 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
     lapply(required_pkgs, library, character.only = TRUE)
   })
 
-  # Set workers
   available_cores <- parallelly::availableCores(logical = TRUE)
+  user_specified_workers <- !is.null(workers)
 
   if (is.null(workers)) {
-    user_specified_workers = FALSE
-    # By default, use 2 cores per CRAN's requirement
-    workers <- min(workers, 2)
+    workers <- min(2, available_cores)
   } else {
     if (!is.numeric(workers) || length(workers) != 1 || workers < 1) {
       stop("`workers` must be a positive integer")
     }
     workers <- min(workers, available_cores)
-    user_specified_workers = TRUE
   }
 
-  # Set future plan
   current_plan <- future::plan()
   if (!inherits(current_plan, "multisession") || future::nbrOfWorkers() != workers) {
     future::plan(future::multisession, workers = workers)
   }
 
   if (verbose) {
-    if (workers == 1) {
-      message("Using 1 worker (single-thread mode).")
-    } else if (!user_specified_workers) {
-      message("Using ", workers, " parallel workers (auto-detected).")
-    } else {
-      message("Using ", workers, " parallel workers (user-specified).")
-    }
+    message("Using ", workers, ifelse(workers == 1, " worker", " workers"))
   }
 
-  # ---- Input checks ----
   if (!inherits(eQTM, "eQTM")) stop("eQTM must be an eQTM object")
   if (!"cpg" %in% colnames(ewas_data)) stop("ewas_data must contain a 'cpg' column.")
   if (!rank_column %in% colnames(ewas_data)) stop("Column '", rank_column, "' not found in ewas_data")
   if (all(is.na(getData(eQTM)$entrez))) stop("Entrez IDs are required for pathway analysis")
 
-  # ---- Sort EWAS data ----
-  if (!rank_column %in% colnames(ewas_data)) stop("Column '", rank_column, "' not found in ewas_data")
+  if (is.null(k_grid)) {
+    k_grid <- auto_generate_k_grid_inflection(ewas_data, rank_column, rank_decreasing, grid_size, verbose)
+  }
+
+  if (is.null(stat_grid)) {
+    stat_vals <- abs(getData(eQTM)$statistics)
+    stat_grid <- round(quantile(stat_vals, probs = seq(0.2, 0.8, length.out = grid_size), na.rm = TRUE), 2)
+  }
+
+  if (is.null(distance_grid)) {
+    dist_vals <- getData(eQTM)$distance
+    distance_grid <- round(quantile(dist_vals, probs = seq(0.5, 0.9, length.out = grid_size), na.rm = TRUE), -3)
+  }
 
   ranking_values <- if (use_abs) abs(ewas_data[[rank_column]]) else ewas_data[[rank_column]]
   ewas_data <- ewas_data[order(ranking_values, decreasing = rank_decreasing), ]
 
-  # ---- Filter gene lists for each k ----
   if (verbose) message("Generating gene lists for all k values...")
   all_gene_sets <- list()
-  valid_combination_count <- 0  # 统计有效组合数量
+  valid_combination_count <- 0
 
-  for (k in k_values) {
+  for (k in k_grid) {
     if (verbose) message(sprintf("Processing top %d CpGs...", k))
     selected_cpgs <- head(ewas_data$cpg, k)
     eQTM_subset <- new("eQTM", data = getData(eQTM)[getData(eQTM)$cpg %in% selected_cpgs, ],
                        metadata = getMetadata(eQTM))
 
+    if (is.null(overlap_threshold)) {
+      temp_lists <- filter_gene_lists(eQTM_subset, stat_grid, distance_grid, overlap_threshold = 1)
+      overlap_threshold <- auto_overlap_threshold(temp_lists$gene_lists, quantile_level = 1 - 1/grid_size, verbose)
+    }
+
     filtered_results <- filter_gene_lists(eQTM_subset, stat_grid, distance_grid, overlap_threshold, verbose = FALSE)
 
     for (i in seq_along(filtered_results$gene_lists)) {
       gene_list_i <- filtered_results$gene_lists[[i]]
-      if (length(gene_list_i) == 0) next  # skip invalid combo
+      if (length(gene_list_i) == 0) next
 
       valid_combination_count <- valid_combination_count + 1
 
@@ -154,14 +159,7 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
 
   if (verbose) message(sprintf("Gene filtering completed. %d valid combinations retained.", valid_combination_count))
 
-  # ---- Run enrichment analysis in parallel ----
-  if (verbose) {
-    if (workers == 1) {
-      message("Running enrichment analysis (single thread)...")
-    } else {
-      message("Running enrichment analysis (parallel)...")
-    }
-  }
+  if (verbose) message("Running enrichment analysis...")
 
   enrich_results <- furrr::future_map(
     all_gene_sets,
@@ -184,7 +182,6 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
     )
   )
 
-  # ---- Prune pathways by vote ----
   enrich_results <- prune_pathways_by_vote(
     enrich_results,
     prune_strategy = prune_strategy,
@@ -193,8 +190,8 @@ pathway_vote <- function(ewas_data, eQTM, k_values, stat_grid, distance_grid,
     verbose = verbose
   )
 
-  # ---- Combine and return results ----
   result_tables <- combine_enrichment_results(enrich_results, databases, verbose = verbose)
   return(result_tables)
 }
+
 

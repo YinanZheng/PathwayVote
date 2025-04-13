@@ -1,3 +1,50 @@
+auto_generate_k_grid_inflection <- function(ewas_data, rank_column = "p_value", rank_decreasing = FALSE,
+                                            grid_size = 5, verbose = FALSE) {
+  x <- ewas_data[[rank_column]]
+  x <- if (rank_decreasing) sort(x, decreasing = TRUE) else sort(x)
+
+  signal <- if (rank_column == "p_value") -log10(x + 1e-300) else abs(x)
+  N <- length(signal)
+
+  delta <- diff(signal)
+  drop_rate <- delta / head(signal, -1)
+  smoothed <- stats::filter(drop_rate, rep(1/5, 5), sides = 1)
+
+  inflection <- which(smoothed > -1e-2)[1]
+  if (is.na(inflection)) inflection <- floor(N / 2)
+
+  num_pts <- min(grid_size, inflection - 10 + 1)
+  k_grid <- unique(round(seq(10, inflection, length.out = num_pts)))
+  k_grid <- k_grid[k_grid >= 10 & k_grid <= N]
+
+  if (verbose) message("Auto-selected k_grid (inflection-based): ", paste(k_grid, collapse = ", "))
+  return(k_grid)
+}
+
+auto_overlap_threshold <- function(gene_lists, quantile_level = 0.75, verbose = FALSE) {
+  n <- length(gene_lists)
+  if (n < 2) return(1)
+
+  jaccard_values <- c()
+
+  for (i in 1:(n - 1)) {
+    for (j in (i + 1):n) {
+      set1 <- gene_lists[[i]]
+      set2 <- gene_lists[[j]]
+      jaccard <- length(intersect(set1, set2)) / length(union(set1, set2))
+      jaccard_values <- c(jaccard_values, jaccard)
+    }
+  }
+
+  threshold <- quantile(jaccard_values, probs = quantile_level, na.rm = TRUE)
+
+  if (verbose) {
+    message(sprintf("Auto-selected overlap_threshold at %.2f quantile: %.2f", quantile_level, threshold))
+  }
+
+  return(threshold)
+}
+
 run_enrichment <- function(gene_list, databases, readable = FALSE, verbose = FALSE) {
   enrich_results <- list()
   if ("Reactome" %in% databases) {
@@ -197,7 +244,7 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
 prune_pathways_by_vote <- function(enrich_results,
                                    min_genes = 2,
                                    prune_strategy = c("cuberoot", "fixed"),
-                                   fixed_value = 3,
+                                   fixed_prune = 3,
                                    verbose = TRUE) {
   prune_strategy <- match.arg(prune_strategy)
 
@@ -205,7 +252,7 @@ prune_pathways_by_vote <- function(enrich_results,
   min_vote_support <- switch(
     prune_strategy,
     cuberoot = max(1, floor(n_runs^(1/3))),
-    fixed = fixed_value
+    fixed = fixed_prune
   )
 
   if (verbose) {
