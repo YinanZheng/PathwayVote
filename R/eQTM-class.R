@@ -2,7 +2,7 @@
 #' @importFrom AnnotationDbi mapIds
 #' @import dplyr
 
-#' @title eQTM Class
+#' @title Expression quantitative trait methylation (eQTM) Class
 #'
 #' @description A class to store eQTM data for pathway analysis. eQTM stands for Expression Quantitative Trait Methylation.
 #' @slot data A data.frame containing eQTM data with columns: cpg, statistics, p_value, distance, and at least one of entrez or ensembl.
@@ -52,7 +52,7 @@ setClass(
   }
 )
 
-#' @title Create an eQTM object
+#' @title Create an expression quantitative trait methylation (eQTM) object
 #'
 #' @param data A data.frame containing eQTM data with columns: cpg, statistics, p_value, distance, and at least one of entrez or ensembl.
 #' \describe{
@@ -143,7 +143,7 @@ create_eQTM <- function(data, metadata = list()) {
   return(eQTM_obj)
 }
 
-#' @title Get eQTM Data
+#' @title Get expression quantitative trait methylation (eQTM) Data
 #' @description Retrieve the eQTM data.frame from an eQTM object.
 #' @param object An eQTM object.
 #' @return A data.frame stored in the object.
@@ -151,7 +151,7 @@ create_eQTM <- function(data, metadata = list()) {
 #' @export
 NULL
 
-#' @title Get eQTM Metadata
+#' @title Get expression quantitative trait methylation (eQTM) Metadata
 #' @description Retrieve the metadata list from an eQTM object.
 #' @param object An eQTM object.
 #' @return A list containing metadata.

@@ -14,34 +14,42 @@
 #'
 #' @param ewas_data A data.frame with columns: cpg and a ranking column (e.g., p_value, score).
 #' @param eQTM An eQTM object containing eQTM data.
-#' @param k_grid A numeric vector of top k CpGs to select. If NULL, inferred automatically.
-#' @param stat_grid A numeric vector of statistics thresholds. If NULL, inferred automatically.
-#' @param distance_grid A numeric vector of distance thresholds. If NULL, inferred automatically.
-#' @param overlap_threshold A numeric value for gene list overlap threshold. If NULL, inferred automatically.
-#' @param grid_size Integer. Number of values in each grid when auto-generating. Default is 5.
 #' @param databases A character vector of pathway databases (e.g., "Reactome").
 #' @param rank_column A character string indicating which column in `ewas_data` to use for ranking.
 #' @param rank_decreasing Logical. If TRUE (default), sorts CpGs from high to low based on `rank_column`.
 #' @param use_abs Logical. Whether to apply `abs()` to the ranking column before sorting CpGs.
-#' @param prune_strategy Character, either "cuberoot" or "fixed".
-#' @param fixed_value Integer, used only if `prune_strategy = "fixed"`.
+#' @param k_grid A numeric vector of top k CpGs to select. If NULL, inferred automatically.
+#' @param stat_grid A numeric vector of statistics thresholds. If NULL, inferred automatically.
+#' @param distance_grid A numeric vector of distance thresholds. If NULL, inferred automatically.
+#' @param overlap_threshold A numeric value for gene list overlap threshold. If NULL, inferred automatically.
+#' @param fixed_prune Integer or NULL. Minimum number of votes to retain a pathway. If NULL, will use cuberoot(N) where N is the number of enrichment runs.
+#' @param grid_size Integer. Number of values in each grid when auto-generating. Default is 5.
 #' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include to be considered.
-#' @param workers Optional integer. Number of parallel workers. If NULL, use 75% of available logical cores.
+#' @param workers Optional integer. Number of parallel workers. If NULL, use 2 logical cores.
 #' @param readable Logical. whether to convert Entrez IDs to gene symbols in enrichment results.
 #' @param verbose Logical. whether to print progress messages.
 #'
 #' @return A named list of data.frames, each containing enrichment results (pathway ID, p.adjust, Description, geneID) for one database (e.g., Reactome, KEGG).
 #'
 #' @examples
-#' data <- data.frame(
-#'   cpg = c("cg000001", "cg000002", "cg000003"),
-#'   statistics = c(2.5, -1.8, 3.2),
-#'   p_value = c(0.01, 0.03, 0.005),
-#'   distance = c(50000, 80000, 30000),
-#'   entrez = c("673", "1956", "5290")
+#' set.seed(123)
+#'
+#' # Simulated EWAS result: a mix of signal and noise
+#' ewas_data <- data.frame(
+#'   cpg = paste0("cg", sprintf("%06d", 1:20)),
+#'   p_value = c(runif(5, 1e-5, 0.001), runif(5, 0.01, 0.05), runif(10, 0.1, 1))
 #' )
-#' eqtm_obj <- create_eQTM(data)
-#' \donttest{
+#'
+#' # Corresponding eQTM mapping (some of these CpGs have gene links)
+#' eqtm_data <- data.frame(
+#'   cpg = ewas_data$cpg,
+#'   statistics = rnorm(20, mean = 2, sd = 1),
+#'   p_value = runif(20, 0.001, 0.05),
+#'   distance = sample(1000:100000, 20),
+#'   entrez = rep(c("5290", "673", "1956", "7157", "7422"), length.out = 20)
+#' )
+#' eqtm_obj <- create_eQTM(eqtm_data)
+#'
 #' results <- pathway_vote(
 #'   ewas_data = data,
 #'   eQTM = eqtm_obj,
@@ -50,24 +58,22 @@
 #'   rank_decreasing = FALSE,
 #'   use_abs = FALSE,
 #'   worker = 1, # If not specified, will use 2 cores by default
-#'   verbose = FALSE
+#'   verbose = TRUE
 #' )
-#' }
 #'
 #' @export
 #'
 pathway_vote <- function(ewas_data, eQTM,
-                         k_grid = NULL,
-                         stat_grid = NULL,
-                         distance_grid = NULL,
-                         overlap_threshold = NULL,
-                         grid_size = 5,
                          databases = c("Reactome"),
                          rank_column = "p_value",
                          rank_decreasing = FALSE,
                          use_abs = FALSE,
-                         prune_strategy = "cuberoot",
-                         fixed_value = 3,
+                         k_grid = NULL,
+                         stat_grid = NULL,
+                         distance_grid = NULL,
+                         overlap_threshold = NULL,
+                         fixed_prune = NULL,
+                         grid_size = 5,
                          min_genes_per_hit = 3,
                          readable = FALSE,
                          workers = NULL,
@@ -184,8 +190,7 @@ pathway_vote <- function(ewas_data, eQTM,
 
   enrich_results <- prune_pathways_by_vote(
     enrich_results,
-    prune_strategy = prune_strategy,
-    fixed_value = fixed_value,
+    fixed_prune = fixed_prune,
     min_genes = min_genes_per_hit,
     verbose = verbose
   )

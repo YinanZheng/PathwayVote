@@ -6,16 +6,26 @@ auto_generate_k_grid_inflection <- function(ewas_data, rank_column = "p_value", 
   signal <- if (rank_column == "p_value") -log10(x + 1e-300) else abs(x)
   N <- length(signal)
 
+  if (N < 10) {
+    k_grid <- seq(2, N, by = 1)
+    if (verbose) message("Fallback: small sample size, k_grid = ", paste(k_grid, collapse = ", "))
+    return(k_grid)
+  }
+
   delta <- diff(signal)
   drop_rate <- delta / head(signal, -1)
   smoothed <- stats::filter(drop_rate, rep(1/5, 5), sides = 1)
 
   inflection <- which(smoothed > -1e-2)[1]
-  if (is.na(inflection)) inflection <- floor(N / 2)
+  if (is.na(inflection) || inflection < 10) {
+    k_grid <- unique(round(seq(2, N, length.out = min(grid_size, N - 1))))
+    if (verbose) message("Fallback: inflection too early, using fallback k_grid = ", paste(k_grid, collapse = ", "))
+    return(k_grid)
+  }
 
   num_pts <- min(grid_size, inflection - 10 + 1)
   k_grid <- unique(round(seq(10, inflection, length.out = num_pts)))
-  k_grid <- k_grid[k_grid >= 10 & k_grid <= N]
+  k_grid <- k_grid[k_grid >= 2 & k_grid <= N]
 
   if (verbose) message("Auto-selected k_grid (inflection-based): ", paste(k_grid, collapse = ", "))
   return(k_grid)
@@ -242,21 +252,19 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
 }
 
 prune_pathways_by_vote <- function(enrich_results,
-                                   min_genes = 2,
-                                   prune_strategy = c("cuberoot", "fixed"),
                                    fixed_prune = 3,
+                                   min_genes = 2,
                                    verbose = TRUE) {
-  prune_strategy <- match.arg(prune_strategy)
-
   n_runs <- length(enrich_results)
-  min_vote_support <- switch(
-    prune_strategy,
-    cuberoot = max(1, floor(n_runs^(1/3))),
-    fixed = fixed_prune
-  )
+  min_vote_support <- if (is.null(fixed_prune)) {
+    max(1, floor(n_runs^(1/3)))
+  } else {
+    fixed_prune
+  }
 
   if (verbose) {
-    message(sprintf("Prune strategy = '%s', total runs = %d", prune_strategy, n_runs))
+    message(sprintf("Pathway pruning: total runs = %d, min votes = %d, min genes = %d",
+                    n_runs, min_vote_support, min_genes))
   }
 
   all_hits <- unlist(lapply(enrich_results, function(x) {
@@ -272,8 +280,7 @@ prune_pathways_by_vote <- function(enrich_results,
   total_after <- length(keep_ids)
 
   if (verbose) {
-    message(sprintf("Pruned pathways: %d retained out of %d total (min votes = %d, min genes = %d)",
-                    total_after, total_before, min_vote_support, min_genes))
+    message(sprintf("Pruned pathways: %d retained out of %d total", total_after, total_before))
   }
 
   pruned_results <- lapply(enrich_results, function(x) {
