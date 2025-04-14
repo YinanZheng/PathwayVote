@@ -88,7 +88,7 @@ results <- pathway_vote(
   rank_column = "p_value",
   rank_decreasing = FALSE,
   use_abs = FALSE,
-  worker = 1, # If not specified, will use 2 cores by default
+  worker = 2, # If not specified, will use 2 cores by default
   verbose = TRUE
 )
 

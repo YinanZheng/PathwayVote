@@ -49,7 +49,7 @@ auto_overlap_threshold <- function(gene_lists, quantile_level = 0.75, verbose = 
   threshold <- quantile(jaccard_values, probs = quantile_level, na.rm = TRUE)
 
   if (verbose) {
-    message(sprintf("Auto-selected overlap_threshold at %.2f quantile: %.2f", quantile_level, threshold))
+    message(sprintf("Auto-selected pathway overlap threshold at %.2f quantile: %.2f", quantile_level, threshold))
   }
 
   return(threshold)

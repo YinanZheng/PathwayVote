@@ -57,7 +57,7 @@
 #'   rank_column = "p_value",
 #'   rank_decreasing = FALSE,
 #'   use_abs = FALSE,
-#'   worker = 1, # If not specified, will use 2 cores by default
+#'   worker = 2, # If not specified, will use 2 cores by default
 #'   verbose = TRUE
 #' )
 #'
@@ -121,12 +121,14 @@ pathway_vote <- function(ewas_data, eQTM,
 
   if (is.null(stat_grid)) {
     stat_vals <- abs(getData(eQTM)$statistics)
-    stat_grid <- round(quantile(stat_vals, probs = seq(0.2, 0.8, length.out = grid_size), na.rm = TRUE), 2)
+    stat_grid <- round(quantile(stat_vals, probs = seq(0.1, 0.9, length.out = grid_size), na.rm = TRUE), 2)
+    if (verbose) message("Auto-selected statistic grid: ", paste(stat_grid, collapse = ", "))
   }
 
   if (is.null(distance_grid)) {
     dist_vals <- getData(eQTM)$distance
-    distance_grid <- round(quantile(dist_vals, probs = seq(0.5, 0.9, length.out = grid_size), na.rm = TRUE), -3)
+    distance_grid <- round(quantile(dist_vals, probs = seq(0.1, 1, length.out = grid_size), na.rm = TRUE), -3)
+    if (verbose) message("Auto-selected distance grid: ", paste(distance_grid, collapse = ", "))
   }
 
   ranking_values <- if (use_abs) abs(ewas_data[[rank_column]]) else ewas_data[[rank_column]]
@@ -164,22 +166,23 @@ pathway_vote <- function(ewas_data, eQTM,
   }
 
   if (verbose) message(sprintf("Gene filtering completed. %d valid combinations retained.", valid_combination_count))
-
   if (verbose) message("Running enrichment analysis...")
 
+  gene_lists <- lapply(all_gene_sets, function(x) x$gene_list)
+
   enrich_results <- furrr::future_map(
-    all_gene_sets,
-    function(x) {
+    gene_lists,
+    function(glist) {
       tryCatch({
         run_enrichment(
-          gene_list = x$gene_list,
+          gene_list = glist,
           databases = databases,
           readable = readable,
           verbose = FALSE
         )
       }, error = function(e) {
-        warning("Enrichment failed for one gene list: ", conditionMessage(e))
-        return(NULL)
+        warning("Enrichment failed: ", conditionMessage(e))
+        NULL
       })
     },
     .options = furrr::furrr_options(
@@ -198,5 +201,3 @@ pathway_vote <- function(ewas_data, eQTM,
   result_tables <- combine_enrichment_results(enrich_results, databases, verbose = verbose)
   return(result_tables)
 }
-
-
