@@ -76,9 +76,6 @@ results <- pathway_vote(
   ewas_data = data,
   eQTM = eqtm_obj,
   databases = c("KEGG"),
-  rank_column = "p_value",
-  rank_decreasing = FALSE,
-  use_abs = FALSE,
   worker = NULL, # If not specified, will use 2 cores by default
   verbose = TRUE
 )

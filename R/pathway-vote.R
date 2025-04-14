@@ -51,9 +51,6 @@
 #'   ewas_data = data,
 #'   eQTM = eqtm_obj,
 #'   databases = c("KEGG"),
-#'   rank_column = "p_value",
-#'   rank_decreasing = FALSE,
-#'   use_abs = FALSE,
 #'   worker = NULL, # If not specified, will use 2 cores by default
 #'   verbose = TRUE
 #' )
@@ -132,13 +129,13 @@ pathway_vote <- function(ewas_data, eQTM,
 
   if (is.null(stat_grid)) {
     stat_vals <- abs(getData(eQTM)$statistics)
-    stat_grid <- round(quantile(stat_vals, probs = seq(0.2, 0.8, length.out = grid_size), na.rm = TRUE), 2)
+    stat_grid <- round(quantile(stat_vals, probs = seq(0.1, 0.9, length.out = grid_size), na.rm = TRUE), 2)
     if (verbose) message("Auto-selected stat_grid: ", paste(stat_grid, collapse = ", "))
   }
 
   if (is.null(distance_grid)) {
     dist_vals <- getData(eQTM)$distance
-    distance_grid <- round(quantile(dist_vals, probs = seq(0.5, 0.9, length.out = grid_size), na.rm = TRUE), -3)
+    distance_grid <- round(quantile(dist_vals, probs = seq(0.1, 1, length.out = grid_size), na.rm = TRUE), -3)
     if (verbose) message("Auto-selected distance_grid: ", paste(distance_grid, collapse = ", "))
   }
 
