@@ -8,16 +8,13 @@
 #' @importFrom org.Hs.eg.db org.Hs.eg.db
 #' @import dplyr
 
-#' @title Pathway Vote
+#' @title Pathway Voting-Based Enrichment Analysis
 #'
-#' @description Performs methylation pathway enrichment analysis using a voting-based approach.
+#' @description Performs pathway enrichment analysis on CpGs using a voting-based approach.
 #'
-#' @param ewas_data A data.frame with columns: cpg and a ranking column (e.g., p_value, score).
+#' @param ewas_data A data.frame with columns: `cpg` and a numeric ranking column (e.g., p-value, t-statistics, variable importance). The second column will be used as the ranking metric.
 #' @param eQTM An eQTM object containing eQTM data.
-#' @param databases A character vector of pathway databases (e.g., "Reactome").
-#' @param rank_column A character string indicating which column in `ewas_data` to use for ranking.
-#' @param rank_decreasing Logical. If TRUE (default), sorts CpGs from high to low based on `rank_column`.
-#' @param use_abs Logical. Whether to apply `abs()` to the ranking column before sorting CpGs.
+#' @param databases A character vector of pathway databases. Supporting: "Reactome", "KEGG", and "GO".
 #' @param k_grid A numeric vector of top k CpGs to select. If NULL, inferred automatically.
 #' @param stat_grid A numeric vector of statistics thresholds. If NULL, inferred automatically.
 #' @param distance_grid A numeric vector of distance thresholds. If NULL, inferred automatically.
@@ -29,7 +26,7 @@
 #' @param readable Logical. whether to convert Entrez IDs to gene symbols in enrichment results.
 #' @param verbose Logical. whether to print progress messages.
 #'
-#' @return A named list of data.frames, each containing enrichment results (pathway ID, p.adjust, Description, geneID) for one database (e.g., Reactome, KEGG).
+#' @return A named list of data.frames, each containing enrichment results for one database.
 #'
 #' @examples
 #' set.seed(123)
@@ -57,7 +54,7 @@
 #'   rank_column = "p_value",
 #'   rank_decreasing = FALSE,
 #'   use_abs = FALSE,
-#'   worker = 2, # If not specified, will use 2 cores by default
+#'   worker = NULL, # If not specified, will use 2 cores by default
 #'   verbose = TRUE
 #' )
 #'
@@ -65,9 +62,6 @@
 #'
 pathway_vote <- function(ewas_data, eQTM,
                          databases = c("Reactome"),
-                         rank_column = "p_value",
-                         rank_decreasing = FALSE,
-                         use_abs = FALSE,
                          k_grid = NULL,
                          stat_grid = NULL,
                          distance_grid = NULL,
@@ -112,8 +106,25 @@ pathway_vote <- function(ewas_data, eQTM,
 
   if (!inherits(eQTM, "eQTM")) stop("eQTM must be an eQTM object")
   if (!"cpg" %in% colnames(ewas_data)) stop("ewas_data must contain a 'cpg' column.")
-  if (!rank_column %in% colnames(ewas_data)) stop("Column '", rank_column, "' not found in ewas_data")
   if (all(is.na(getData(eQTM)$entrez))) stop("Entrez IDs are required for pathway analysis")
+  if (ncol(ewas_data) < 2) stop("ewas_data must have at least two columns: 'cpg' and a ranking column")
+
+  # Automatically use the second column as ranking
+  rank_column <- colnames(ewas_data)[2]
+  rank_values <- ewas_data[[rank_column]]
+
+  if (!is.numeric(rank_values)) {
+    stop("The second column of ewas_data must be numeric for ranking purposes.")
+  }
+
+  is_pval_like <- all(rank_values >= 0 & rank_values <= 1, na.rm = TRUE)
+  use_abs <- !is_pval_like
+  rank_decreasing <- !is_pval_like
+
+  if (verbose) {
+    message(sprintf("Auto-selected ranking: %s (decreasing = %s, absolute = %s)",
+                    rank_column, rank_decreasing, use_abs))
+  }
 
   if (is.null(k_grid)) {
     k_grid <- auto_generate_k_grid_inflection(ewas_data, rank_column, rank_decreasing, grid_size, verbose)
@@ -121,17 +132,17 @@ pathway_vote <- function(ewas_data, eQTM,
 
   if (is.null(stat_grid)) {
     stat_vals <- abs(getData(eQTM)$statistics)
-    stat_grid <- round(quantile(stat_vals, probs = seq(0.1, 0.9, length.out = grid_size), na.rm = TRUE), 2)
-    if (verbose) message("Auto-selected statistic grid: ", paste(stat_grid, collapse = ", "))
+    stat_grid <- round(quantile(stat_vals, probs = seq(0.2, 0.8, length.out = grid_size), na.rm = TRUE), 2)
+    if (verbose) message("Auto-selected stat_grid: ", paste(stat_grid, collapse = ", "))
   }
 
   if (is.null(distance_grid)) {
     dist_vals <- getData(eQTM)$distance
-    distance_grid <- round(quantile(dist_vals, probs = seq(0.1, 1, length.out = grid_size), na.rm = TRUE), -3)
-    if (verbose) message("Auto-selected distance grid: ", paste(distance_grid, collapse = ", "))
+    distance_grid <- round(quantile(dist_vals, probs = seq(0.5, 0.9, length.out = grid_size), na.rm = TRUE), -3)
+    if (verbose) message("Auto-selected distance_grid: ", paste(distance_grid, collapse = ", "))
   }
 
-  ranking_values <- if (use_abs) abs(ewas_data[[rank_column]]) else ewas_data[[rank_column]]
+  ranking_values <- if (use_abs) abs(rank_values) else rank_values
   ewas_data <- ewas_data[order(ranking_values, decreasing = rank_decreasing), ]
 
   if (verbose) message("Generating gene lists for all k values...")

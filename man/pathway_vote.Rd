@@ -2,15 +2,12 @@
 % Please edit documentation in R/pathway-vote.R
 \name{pathway_vote}
 \alias{pathway_vote}
-\title{Pathway Vote}
+\title{Pathway Voting-Based Enrichment Analysis}
 \usage{
 pathway_vote(
   ewas_data,
   eQTM,
   databases = c("Reactome"),
-  rank_column = "p_value",
-  rank_decreasing = FALSE,
-  use_abs = FALSE,
   k_grid = NULL,
   stat_grid = NULL,
   distance_grid = NULL,
@@ -24,17 +21,11 @@ pathway_vote(
 )
 }
 \arguments{
-\item{ewas_data}{A data.frame with columns: cpg and a ranking column (e.g., p_value, score).}
+\item{ewas_data}{A data.frame with columns: `cpg` and a numeric ranking column (e.g., p-value, t-statistics, variable importance). The second column will be used as the ranking metric.}
 
 \item{eQTM}{An eQTM object containing eQTM data.}
 
-\item{databases}{A character vector of pathway databases (e.g., "Reactome").}
-
-\item{rank_column}{A character string indicating which column in `ewas_data` to use for ranking.}
-
-\item{rank_decreasing}{Logical. If TRUE (default), sorts CpGs from high to low based on `rank_column`.}
-
-\item{use_abs}{Logical. Whether to apply `abs()` to the ranking column before sorting CpGs.}
+\item{databases}{A character vector of pathway databases. Supporting: "Reactome", "KEGG", and "GO".}
 
 \item{k_grid}{A numeric vector of top k CpGs to select. If NULL, inferred automatically.}
 
@@ -57,10 +48,10 @@ pathway_vote(
 \item{verbose}{Logical. whether to print progress messages.}
 }
 \value{
-A named list of data.frames, each containing enrichment results (pathway ID, p.adjust, Description, geneID) for one database (e.g., Reactome, KEGG).
+A named list of data.frames, each containing enrichment results for one database.
 }
 \description{
-Performs methylation pathway enrichment analysis using a voting-based approach.
+Performs pathway enrichment analysis on CpGs using a voting-based approach.
 }
 \examples{
 set.seed(123)
@@ -88,7 +79,7 @@ results <- pathway_vote(
   rank_column = "p_value",
   rank_decreasing = FALSE,
   use_abs = FALSE,
-  worker = 2, # If not specified, will use 2 cores by default
+  worker = NULL, # If not specified, will use 2 cores by default
   verbose = TRUE
 )
 
