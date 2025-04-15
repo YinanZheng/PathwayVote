@@ -31,6 +31,45 @@ auto_generate_k_grid_inflection <- function(ewas_data, rank_column = "p_value", 
   return(k_grid)
 }
 
+select_gene_lists_entropy_auto <- function(gene_lists, verbose = TRUE) {
+  all_genes <- unlist(gene_lists)
+  gene_freq <- table(all_genes)
+
+  entropy_score <- sapply(gene_lists, function(gset) {
+    sum(log(1 / gene_freq[gset]), na.rm = TRUE)
+  })
+
+  jaccard_dist <- function(a, b) {
+    length(intersect(a, b)) / length(union(a, b))
+  }
+
+  instability <- sapply(seq_along(gene_lists), function(i) {
+    mean(sapply(setdiff(seq_along(gene_lists), i), function(j) 1 - jaccard_dist(gene_lists[[i]], gene_lists[[j]])))
+  })
+
+  total_score <- scale(entropy_score) - scale(instability)
+
+  remaining <- seq_along(gene_lists)
+  selected <- c()
+
+  while (length(remaining) > 0) {
+    best_idx <- remaining[which.max(total_score[remaining])]
+    selected <- c(selected, best_idx)
+
+    overlap <- sapply(remaining, function(i) {
+      length(intersect(gene_lists[[best_idx]], gene_lists[[i]])) / length(union(gene_lists[[best_idx]], gene_lists[[i]]))
+    })
+
+    remaining <- setdiff(remaining, remaining[overlap >= 0.3])
+
+    if (verbose) {
+      message(sprintf("Selected gene list %d, removed %d overlapping lists.", best_idx, sum(overlap >= 0.3)))
+    }
+  }
+
+  return(gene_lists[selected])
+}
+
 auto_overlap_threshold <- function(gene_lists, quantile_level = 0.75, verbose = FALSE) {
   n <- length(gene_lists)
   if (n < 2) return(1)
