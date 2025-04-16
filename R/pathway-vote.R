@@ -152,22 +152,22 @@ pathway_vote <- function(ewas_data, eQTM,
     eQTM_subset <- new("eQTM", data = getData(eQTM)[getData(eQTM)$cpg %in% selected_cpgs, ],
                        metadata = getMetadata(eQTM))
 
-    if (is.null(overlap_threshold)) {
-      temp_lists <- filter_gene_lists(eQTM_subset, stat_grid, distance_grid, overlap_threshold = 1)
-      overlap_threshold <- auto_overlap_threshold(temp_lists$gene_lists, quantile_level = 1 - 1/grid_size, verbose)
-    }
+    raw_result <- filter_gene_lists(eQTM_subset, stat_grid, distance_grid, overlap_threshold = 1, verbose = verbose)
 
-    filtered_results <- filter_gene_lists(eQTM_subset, stat_grid, distance_grid, overlap_threshold, verbose = FALSE)
+    # Apply entropy + stability pruning
+    entropy_filtered_lists <- select_gene_lists_entropy_auto(
+      gene_lists = raw_result$gene_lists,
+      verbose = verbose
+    )
 
-    for (i in seq_along(filtered_results$gene_lists)) {
-      gene_list_i <- filtered_results$gene_lists[[i]]
-      if (length(gene_list_i) == 0) next
+    # 反向匹配保留 gene list 的 param 组合
+    kept_indices <- which(vapply(raw_result$gene_lists, function(x) any(sapply(entropy_filtered_lists, function(y) identical(x, y))), logical(1)))
 
-      valid_combination_count <- valid_combination_count + 1
-
+    for (i in kept_indices) {
+      gene_list_i <- raw_result$gene_lists[[i]]
       all_gene_sets[[length(all_gene_sets) + 1]] <- list(
         gene_list = gene_list_i,
-        param = filtered_results$params[[i]],
+        param = raw_result$params[[i]],
         k = k
       )
     }
