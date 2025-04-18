@@ -11,7 +11,6 @@ pathway_vote(
   k_grid = NULL,
   stat_grid = NULL,
   distance_grid = NULL,
-  overlap_threshold = NULL,
   fixed_prune = NULL,
   grid_size = 5,
   min_genes_per_hit = 3,
@@ -32,8 +31,6 @@ pathway_vote(
 \item{stat_grid}{A numeric vector of statistics thresholds. If NULL, inferred automatically.}
 
 \item{distance_grid}{A numeric vector of distance thresholds. If NULL, inferred automatically.}
-
-\item{overlap_threshold}{A numeric value for gene list overlap threshold. If NULL, inferred automatically.}
 
 \item{fixed_prune}{Integer or NULL. Minimum number of votes to retain a pathway. If NULL, will use cuberoot(N) where N is the number of enrichment runs.}
 

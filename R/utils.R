@@ -70,30 +70,6 @@ select_gene_lists_entropy_auto <- function(gene_lists, verbose = TRUE) {
   return(gene_lists[selected])
 }
 
-auto_overlap_threshold <- function(gene_lists, quantile_level = 0.75, verbose = FALSE) {
-  n <- length(gene_lists)
-  if (n < 2) return(1)
-
-  jaccard_values <- c()
-
-  for (i in 1:(n - 1)) {
-    for (j in (i + 1):n) {
-      set1 <- gene_lists[[i]]
-      set2 <- gene_lists[[j]]
-      jaccard <- length(intersect(set1, set2)) / length(union(set1, set2))
-      jaccard_values <- c(jaccard_values, jaccard)
-    }
-  }
-
-  threshold <- quantile(jaccard_values, probs = quantile_level, na.rm = TRUE)
-
-  if (verbose) {
-    message(sprintf("Auto-selected pathway overlap threshold at %.2f quantile: %.2f", quantile_level, threshold))
-  }
-
-  return(threshold)
-}
-
 run_enrichment <- function(gene_list, databases, readable = FALSE, verbose = FALSE) {
   enrich_results <- list()
   if ("Reactome" %in% databases) {
@@ -131,7 +107,7 @@ gene_filter <- function(eQTM, stat_threshold, distance) {
   return(list(entrez = unique(na.omit(eQTM_filtered$entrez)), p_values = eQTM_filtered$p_value))
 }
 
-filter_gene_lists <- function(eQTM, stat_grid, distance_grid, overlap_threshold = 0.5, verbose = FALSE) {
+generate_gene_lists_grid <- function(eQTM, stat_grid, distance_grid, verbose = FALSE) {
   if (!inherits(eQTM, "eQTM")) stop("Input must be an eQTM object.")
   data <- getData(eQTM)
 
@@ -144,39 +120,23 @@ filter_gene_lists <- function(eQTM, stat_grid, distance_grid, overlap_threshold 
       if (nrow(subset) == 0) next
 
       map <- split(subset$entrez, subset$cpg)
-      map <- lapply(map, function(ids) unique(na.omit(as.numeric(ids))))
+      map <- lapply(map, function(ids) unique(na.omit(as.character(ids))))
       map <- map[lengths(map) > 0]
 
-      if (length(map) == 0) next
-
       gene_list <- unique(unlist(map))
-      gene_list <- gene_list[!is.na(gene_list)]
       if (length(gene_list) == 0) next
-
-      overlap_pass <- TRUE
-      for (existing in gene_lists) {
-        jaccard <- length(intersect(existing, gene_list)) / length(union(existing, gene_list))
-        if (jaccard >= overlap_threshold) {
-          overlap_pass <- FALSE
-          break
-        }
-      }
-      if (!overlap_pass) next
-
-      if (verbose) {
-        message(sprintf("  Accepted: %d genes, %d CpGs (stat > %.2f, dist < %d)",
-                        length(gene_list), length(map), r, d))
-      }
 
       gene_lists[[length(gene_lists) + 1]] <- gene_list
       params[[length(params) + 1]] <- c(stat = r, d = d)
+
+      if (verbose) {
+        message(sprintf("Generated: %d genes, %d CpGs (stat > %.2f, dist < %d)",
+                        length(gene_list), length(map), r, d))
+      }
     }
   }
 
-  return(list(
-    gene_lists = gene_lists,
-    params = params
-  ))
+  return(list(gene_lists = gene_lists, params = params))
 }
 
 harmonic_mean_p <- function(p_values) {

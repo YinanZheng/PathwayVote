@@ -18,7 +18,6 @@
 #' @param k_grid A numeric vector of top k CpGs to select. If NULL, inferred automatically.
 #' @param stat_grid A numeric vector of statistics thresholds. If NULL, inferred automatically.
 #' @param distance_grid A numeric vector of distance thresholds. If NULL, inferred automatically.
-#' @param overlap_threshold A numeric value for gene list overlap threshold. If NULL, inferred automatically.
 #' @param fixed_prune Integer or NULL. Minimum number of votes to retain a pathway. If NULL, will use cuberoot(N) where N is the number of enrichment runs.
 #' @param grid_size Integer. Number of values in each grid when auto-generating. Default is 5.
 #' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include to be considered.
@@ -62,7 +61,6 @@ pathway_vote <- function(ewas_data, eQTM,
                          k_grid = NULL,
                          stat_grid = NULL,
                          distance_grid = NULL,
-                         overlap_threshold = NULL,
                          fixed_prune = NULL,
                          grid_size = 5,
                          min_genes_per_hit = 3,
@@ -152,15 +150,16 @@ pathway_vote <- function(ewas_data, eQTM,
     eQTM_subset <- new("eQTM", data = getData(eQTM)[getData(eQTM)$cpg %in% selected_cpgs, ],
                        metadata = getMetadata(eQTM))
 
-    raw_result <- filter_gene_lists(eQTM_subset, stat_grid, distance_grid, overlap_threshold = 1, verbose = verbose)
+    # Step 1: Generate all candidate gene lists
+    raw_results <- generate_gene_lists_grid(eQTM_subset, stat_grid, distance_grid, verbose = verbose)
 
-    # Apply entropy + stability pruning
+    # Step 2: Apply entropy + stability-based pruning
     entropy_filtered_lists <- select_gene_lists_entropy_auto(
       gene_lists = raw_result$gene_lists,
       verbose = verbose
     )
 
-    # 反向匹配保留 gene list 的 param 组合
+    # Step 3: Match back to their corresponding stat/distance params
     kept_indices <- which(vapply(raw_result$gene_lists, function(x) any(sapply(entropy_filtered_lists, function(y) identical(x, y))), logical(1)))
 
     for (i in kept_indices) {
