@@ -296,7 +296,7 @@ prune_pathways_by_vote <- function(enrich_results,
   }
 
   if (verbose) {
-    message(sprintf("Pathway pruning: total runs = %d, min votes = %d, min genes = %d",
+    message(sprintf("Pathway pruning: min votes = %d, min genes = %d",
                     n_runs, min_vote_support, min_genes))
   }
 
@@ -313,7 +313,7 @@ prune_pathways_by_vote <- function(enrich_results,
   total_after <- length(keep_ids)
 
   if (verbose) {
-    message(sprintf("Pruned pathways: %d retained out of %d total", total_after, total_before))
+    message(sprintf("Pruned pathways: %d retained out of %d total enriched pathways", total_after, total_before))
   }
 
   pruned_results <- lapply(enrich_results, function(x) {

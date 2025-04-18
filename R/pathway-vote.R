@@ -208,8 +208,7 @@ pathway_vote <- function(ewas_data, eQTM,
       })
     },
     .options = furrr::furrr_options(
-      seed = TRUE,
-      packages = c("PathwayVote", "ReactomePA", "clusterProfiler", "org.Hs.eg.db")
+      seed = TRUE
     )
   )
 
