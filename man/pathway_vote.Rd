@@ -26,11 +26,11 @@ pathway_vote(
 
 \item{databases}{A character vector of pathway databases. Supporting: "Reactome", "KEGG", and "GO".}
 
-\item{k_grid}{A numeric vector of top k CpGs to select. If NULL, inferred automatically.}
+\item{k_grid}{A numeric vector of top-k CpGs to consider for gene set construction. If NULL, automatically inferred based on inflection point detection from the ranking curve.}
 
-\item{stat_grid}{A numeric vector of statistics thresholds. If NULL, inferred automatically.}
+\item{stat_grid}{A numeric vector of eQTM statistic thresholds. If NULL, generated based on quantiles of the observed distribution.}
 
-\item{distance_grid}{A numeric vector of distance thresholds. If NULL, inferred automatically.}
+\item{distance_grid}{A numeric vector of CpG-gene distance thresholds (in base pairs). If NULL, generated similarly.}
 
 \item{fixed_prune}{Integer or NULL. Minimum number of votes to retain a pathway. If NULL, will use cuberoot(N) where N is the number of enrichment runs.}
 
@@ -45,10 +45,17 @@ pathway_vote(
 \item{verbose}{Logical. whether to print progress messages.}
 }
 \value{
-A named list of data.frames, each containing enrichment results for one database.
+A named list of data.frames, each corresponding to a selected pathway database
+(e.g., `Reactome`, `KEGG`, `GO`). Each data.frame contains enriched pathways with
+columns: `ID`, `p.adjust`, `Description`, and `geneID`.
 }
 \description{
-Performs pathway enrichment analysis on CpGs using a voting-based approach.
+Performs pathway enrichment analysis using a voting-based framework that integrates
+CpG-gene regulatory information from expression quantitative trait methylation (eQTM) data.
+For a grid of top-ranked CpGs and filtering thresholds, gene sets are generated and filtered using
+an entropy-based pruning strategy that balances information richness and stability. Enrichment results
+across parameter combinations are aggregated using a voting scheme, prioritizing
+pathways that consistently appear under diverse settings.
 }
 \examples{
 set.seed(123)
@@ -76,5 +83,6 @@ results <- pathway_vote(
   worker = NULL, # If not specified, will use 2 cores by default
   verbose = TRUE
 )
+head(results$KEGG)
 
 }

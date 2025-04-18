@@ -10,14 +10,20 @@
 
 #' @title Pathway Voting-Based Enrichment Analysis
 #'
-#' @description Performs pathway enrichment analysis on CpGs using a voting-based approach.
+#' @description
+#' Performs pathway enrichment analysis using a voting-based framework that integrates
+#' CpG-gene regulatory information from expression quantitative trait methylation (eQTM) data.
+#' For a grid of top-ranked CpGs and filtering thresholds, gene sets are generated and filtered using
+#' an entropy-based pruning strategy that balances information richness and stability. Enrichment results
+#' across parameter combinations are aggregated using a voting scheme, prioritizing
+#' pathways that consistently appear under diverse settings.
 #'
 #' @param ewas_data A data.frame with columns: `cpg` and a numeric ranking column (e.g., p-value, t-statistics, variable importance). The second column will be used as the ranking metric.
 #' @param eQTM An eQTM object containing eQTM data.
 #' @param databases A character vector of pathway databases. Supporting: "Reactome", "KEGG", and "GO".
-#' @param k_grid A numeric vector of top k CpGs to select. If NULL, inferred automatically.
-#' @param stat_grid A numeric vector of statistics thresholds. If NULL, inferred automatically.
-#' @param distance_grid A numeric vector of distance thresholds. If NULL, inferred automatically.
+#' @param k_grid A numeric vector of top-k CpGs to consider for gene set construction. If NULL, automatically inferred based on inflection point detection from the ranking curve.
+#' @param stat_grid A numeric vector of eQTM statistic thresholds. If NULL, generated based on quantiles of the observed distribution.
+#' @param distance_grid A numeric vector of CpG-gene distance thresholds (in base pairs). If NULL, generated similarly.
 #' @param fixed_prune Integer or NULL. Minimum number of votes to retain a pathway. If NULL, will use cuberoot(N) where N is the number of enrichment runs.
 #' @param grid_size Integer. Number of values in each grid when auto-generating. Default is 5.
 #' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include to be considered.
@@ -25,7 +31,9 @@
 #' @param readable Logical. whether to convert Entrez IDs to gene symbols in enrichment results.
 #' @param verbose Logical. whether to print progress messages.
 #'
-#' @return A named list of data.frames, each containing enrichment results for one database.
+#' @return A named list of data.frames, each corresponding to a selected pathway database
+#' (e.g., `Reactome`, `KEGG`, `GO`). Each data.frame contains enriched pathways with
+#' columns: `ID`, `p.adjust`, `Description`, and `geneID`.
 #'
 #' @examples
 #' set.seed(123)
@@ -53,6 +61,7 @@
 #'   worker = NULL, # If not specified, will use 2 cores by default
 #'   verbose = TRUE
 #' )
+#' head(results$KEGG)
 #'
 #' @export
 #'
@@ -67,6 +76,12 @@ pathway_vote <- function(ewas_data, eQTM,
                          readable = FALSE,
                          workers = NULL,
                          verbose = FALSE) {
+
+  if (verbose) {
+    message("==== PathwayVote Start ====")
+    message("Input CpGs: ", nrow(ewas_data))
+    message("Databases: ", paste(databases, collapse = ", "))
+  }
 
   required_pkgs <- c("PathwayVote", "furrr", "future", "ReactomePA", "clusterProfiler", "org.Hs.eg.db")
   lapply(required_pkgs, function(pkg) {
@@ -90,10 +105,7 @@ pathway_vote <- function(ewas_data, eQTM,
     workers <- min(workers, available_cores)
   }
 
-  current_plan <- future::plan()
-  if (!inherits(current_plan, "multisession") || future::nbrOfWorkers() != workers) {
-    future::plan(future::multisession, workers = workers)
-  }
+  safe_setup_plan(workers)
 
   if (verbose) {
     message("Using ", workers, ifelse(workers == 1, " worker", " workers"))
@@ -161,7 +173,8 @@ pathway_vote <- function(ewas_data, eQTM,
     )
 
     # Step 3: Match back to their corresponding stat/distance params
-    kept_indices <- which(vapply(raw_results$gene_lists, function(x) any(sapply(entropy_filtered_lists, function(y) identical(x, y))), logical(1)))
+    kept_indices <- which(vapply(raw_results$gene_lists, function(x)
+      any(sapply(entropy_filtered_lists, function(y) setequal(x, y))), logical(1)))
 
     for (i in kept_indices) {
       gene_list_i <- raw_results$gene_lists[[i]]
@@ -170,6 +183,7 @@ pathway_vote <- function(ewas_data, eQTM,
         param = raw_results$params[[i]],
         k = k
       )
+      valid_combination_count <- valid_combination_count + 1
     }
   }
 
@@ -189,7 +203,7 @@ pathway_vote <- function(ewas_data, eQTM,
           verbose = FALSE
         )
       }, error = function(e) {
-        warning("Enrichment failed: ", conditionMessage(e))
+        warning("Enrichment failed for gene list ", paste(head(glist, 5), collapse = ","), ": ", conditionMessage(e))
         NULL
       })
     },
@@ -199,6 +213,7 @@ pathway_vote <- function(ewas_data, eQTM,
     )
   )
 
+  # Will use cube-root(N) if fixed_prune is NULL
   enrich_results <- prune_pathways_by_vote(
     enrich_results,
     fixed_prune = fixed_prune,

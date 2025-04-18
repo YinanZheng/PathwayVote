@@ -1,3 +1,17 @@
+safe_setup_plan <- function(workers) {
+  os <- .Platform$OS.type
+  tryCatch({
+    if (os == "windows") {
+      future::plan(future::multisession, workers = workers)
+    } else {
+      future::plan(future::multicore, workers = workers)
+    }
+  }, error = function(e) {
+    message("Failed to setup parallel backend. Falling back to sequential. Reason: ", e$message)
+    future::plan(future::sequential)
+  })
+}
+
 auto_generate_k_grid_inflection <- function(ewas_data, rank_column = "p_value", rank_decreasing = FALSE,
                                             grid_size = 5, verbose = FALSE) {
   x <- ewas_data[[rank_column]]
