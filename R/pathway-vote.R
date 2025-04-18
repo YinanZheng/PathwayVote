@@ -155,18 +155,18 @@ pathway_vote <- function(ewas_data, eQTM,
 
     # Step 2: Apply entropy + stability-based pruning
     entropy_filtered_lists <- select_gene_lists_entropy_auto(
-      gene_lists = raw_result$gene_lists,
+      gene_lists = raw_results$gene_lists,
       verbose = verbose
     )
 
     # Step 3: Match back to their corresponding stat/distance params
-    kept_indices <- which(vapply(raw_result$gene_lists, function(x) any(sapply(entropy_filtered_lists, function(y) identical(x, y))), logical(1)))
+    kept_indices <- which(vapply(raw_results$gene_lists, function(x) any(sapply(entropy_filtered_lists, function(y) identical(x, y))), logical(1)))
 
     for (i in kept_indices) {
-      gene_list_i <- raw_result$gene_lists[[i]]
+      gene_list_i <- raw_results$gene_lists[[i]]
       all_gene_sets[[length(all_gene_sets) + 1]] <- list(
         gene_list = gene_list_i,
-        param = raw_result$params[[i]],
+        param = raw_results$params[[i]],
         k = k
       )
     }
