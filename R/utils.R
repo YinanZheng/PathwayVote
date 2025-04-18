@@ -31,7 +31,7 @@ auto_generate_k_grid_inflection <- function(ewas_data, rank_column = "p_value", 
   return(k_grid)
 }
 
-select_gene_lists_entropy_auto <- function(gene_lists, verbose = TRUE) {
+select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, verbose = TRUE) {
   all_genes <- unlist(gene_lists)
   gene_freq <- table(all_genes)
 
@@ -49,6 +49,25 @@ select_gene_lists_entropy_auto <- function(gene_lists, verbose = TRUE) {
 
   total_score <- scale(entropy_score) - scale(instability)
 
+  # ---- Adaptive overlap threshold based on pairwise Jaccard ----
+  pairwise_jaccard <- c()
+  for (i in seq_along(gene_lists)) {
+    for (j in (i+1):length(gene_lists)) {
+      jval <- jaccard_dist(gene_lists[[i]], gene_lists[[j]])
+      pairwise_jaccard <- c(pairwise_jaccard, jval)
+    }
+  }
+
+  if (length(pairwise_jaccard) >= 3) {
+    overlap_threshold <- quantile(pairwise_jaccard, probs = 1 - 1/grid_size, na.rm = TRUE)
+  } else {
+    overlap_threshold <- 0.3  # fallback
+  }
+
+  if (verbose) {
+    message(sprintf("Adaptive overlap threshold set to %.3f based on (1 - 1/grid_size)", overlap_threshold))
+  }
+
   remaining <- seq_along(gene_lists)
   selected <- c()
 
@@ -57,13 +76,13 @@ select_gene_lists_entropy_auto <- function(gene_lists, verbose = TRUE) {
     selected <- c(selected, best_idx)
 
     overlap <- sapply(remaining, function(i) {
-      length(intersect(gene_lists[[best_idx]], gene_lists[[i]])) / length(union(gene_lists[[best_idx]], gene_lists[[i]]))
+      jaccard_dist(gene_lists[[best_idx]], gene_lists[[i]])
     })
 
-    remaining <- setdiff(remaining, remaining[overlap >= 0.3])
+    remaining <- setdiff(remaining, remaining[overlap >= overlap_threshold])
 
     if (verbose) {
-      message(sprintf("Selected gene list %d, removed %d overlapping lists.", best_idx, sum(overlap >= 0.3)))
+      message(sprintf("Selected gene list %d, removed %d overlapping lists.", best_idx, sum(overlap >= overlap_threshold)))
     }
   }
 
@@ -130,7 +149,7 @@ generate_gene_lists_grid <- function(eQTM, stat_grid, distance_grid, verbose = F
       params[[length(params) + 1]] <- c(stat = r, d = d)
 
       if (verbose) {
-        message(sprintf("Generated: %d genes, %d CpGs (stat > %.2f, dist < %d)",
+        message(sprintf("Generated: %d genes, %d CpGs (|stat| > %.2f, dist < %d)",
                         length(gene_list), length(map), r, d))
       }
     }

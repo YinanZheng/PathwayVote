@@ -156,6 +156,7 @@ pathway_vote <- function(ewas_data, eQTM,
     # Step 2: Apply entropy + stability-based pruning
     entropy_filtered_lists <- select_gene_lists_entropy_auto(
       gene_lists = raw_results$gene_lists,
+      grid_size = grid_size,
       verbose = verbose
     )
 
