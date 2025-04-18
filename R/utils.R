@@ -31,6 +31,10 @@ auto_generate_k_grid_inflection <- function(ewas_data, rank_column = "p_value", 
   return(k_grid)
 }
 
+jaccard_dist <- function(a, b) {
+  length(intersect(a, b)) / length(union(a, b))
+}
+
 select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, verbose = TRUE) {
   all_genes <- unlist(gene_lists)
   gene_freq <- table(all_genes)
@@ -38,10 +42,6 @@ select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, verbose = 
   entropy_score <- sapply(gene_lists, function(gset) {
     sum(log(1 / gene_freq[gset]), na.rm = TRUE)
   })
-
-  jaccard_dist <- function(a, b) {
-    length(intersect(a, b)) / length(union(a, b))
-  }
 
   instability <- sapply(seq_along(gene_lists), function(i) {
     mean(sapply(setdiff(seq_along(gene_lists), i), function(j) 1 - jaccard_dist(gene_lists[[i]], gene_lists[[j]])))
@@ -51,21 +51,22 @@ select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, verbose = 
 
   # ---- Adaptive overlap threshold based on pairwise Jaccard ----
   pairwise_jaccard <- c()
-  for (i in seq_along(gene_lists)) {
-    for (j in (i+1):length(gene_lists)) {
-      jval <- jaccard_dist(gene_lists[[i]], gene_lists[[j]])
-      pairwise_jaccard <- c(pairwise_jaccard, jval)
+  N <- length(gene_lists)
+  if (N >= 2) {
+    for (i in 1:(N - 1)) {
+      for (j in (i + 1):N) {
+        jval <- jaccard_dist(gene_lists[[i]], gene_lists[[j]])
+        pairwise_jaccard <- c(pairwise_jaccard, jval)
+      }
     }
   }
 
   if (length(pairwise_jaccard) >= 3) {
     overlap_threshold <- quantile(pairwise_jaccard, probs = 1 - 1/grid_size, na.rm = TRUE)
+    if (verbose) message(sprintf("Adaptive overlap threshold set to %.3f based on (1 - 1/grid_size)", overlap_threshold))
   } else {
-    overlap_threshold <- 0.3  # fallback
-  }
-
-  if (verbose) {
-    message(sprintf("Adaptive overlap threshold set to %.3f based on (1 - 1/grid_size)", overlap_threshold))
+    overlap_threshold <- 0.5  # fallback
+    if (verbose) message("Not enough gene lists for adaptive thresholding. Using fixed threshold = 0.5.")
   }
 
   remaining <- seq_along(gene_lists)
