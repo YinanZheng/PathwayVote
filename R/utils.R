@@ -296,8 +296,7 @@ prune_pathways_by_vote <- function(enrich_results,
   }
 
   if (verbose) {
-    message(sprintf("Pathway pruning: min votes = %d, min genes = %d",
-                    n_runs, min_vote_support, min_genes))
+    message(sprintf("Pathway pruning: min votes = %d, min genes = %d", min_vote_support, min_genes))
   }
 
   all_hits <- unlist(lapply(enrich_results, function(x) {
