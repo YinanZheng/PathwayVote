@@ -70,6 +70,7 @@ pathway_vote <- function(ewas_data, eQTM,
                          k_grid = NULL,
                          stat_grid = NULL,
                          distance_grid = NULL,
+                         overlap_threshold = NULL,
                          fixed_prune = NULL,
                          grid_size = 5,
                          min_genes_per_hit = 3,
@@ -169,6 +170,7 @@ pathway_vote <- function(ewas_data, eQTM,
     entropy_filtered_lists <- select_gene_lists_entropy_auto(
       gene_lists = raw_results$gene_lists,
       grid_size = grid_size,
+      overlap_threshold = overlap_threshold,
       verbose = verbose
     )
 
