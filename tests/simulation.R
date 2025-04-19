@@ -7,6 +7,7 @@ run_benchmark_simulations <- function(
     voting_params = list(),
     fdr_cutoff = 0.05,
     workers = 30,
+    PathwayVoteOnly = FALSE,
     verbose = TRUE
 ) {
   library(dplyr)
@@ -16,7 +17,6 @@ run_benchmark_simulations <- function(
   all_metrics <- list()
   per_pathway_log <- list()
 
-  # ----------------------
   extract_additional_metrics <- function(result_df, sim_data, pathway2gene, fdr_cutoff = 0.05) {
     detected_pathways <- result_df$ID[result_df$p.adjust <= fdr_cutoff]
     pathway_sizes <- sapply(detected_pathways, function(pid) length(pathway2gene[[pid]]))
@@ -30,13 +30,11 @@ run_benchmark_simulations <- function(
       signal_gene_coverage = coverage_rate
     )
   }
-  # ----------------------
 
   for (i in seq_len(n_repeats)) {
     seed <- seed_base + i
     if (verbose) message("🧪 Running simulation ", i, " (seed = ", seed, ")")
 
-    # get top tier pathways with sufficient genes but unrelated pathways
     pathway_info <- as.list(select_diverse_top_pathways(hierarchy_table, pathway2gene, seed = seed))
     sim_data <- simulate_benchmark_dataset(
       pathway_info = pathway_info,
@@ -52,18 +50,37 @@ run_benchmark_simulations <- function(
       seed = seed
     )
 
-    # --- Conventional ---
-    conventional_result <- cpg2gene_enrichment(sim_data$ewas_data, top_k = max(voting_params$k_grid))
-    eval_c <- benchmark_enrichment_results(
-      result_df = conventional_result,
-      truth_pathway_ids = sim_data$truth_pathway_ids,
-      hierarchy_table = hierarchy_table,
-      fdr_cutoff = fdr_cutoff,
-      include_descendants = TRUE,
-      filter_descendants_by_gene = TRUE,
-      signal_entrez_genes = sim_data$signal_entrez_genes,
-      pathway2gene = pathway2gene
-    )
+    # Initialize lists for this run
+    metric_rows <- list()
+    pathway_rows <- list()
+
+    # --- Optional Conventional ---
+    if (!PathwayVoteOnly) {
+      conventional_result <- cpg2gene_enrichment(sim_data$ewas_data, top_k = max(voting_params$k_grid))
+
+      eval_c <- benchmark_enrichment_results(
+        result_df = conventional_result,
+        truth_pathway_ids = sim_data$truth_pathway_ids,
+        hierarchy_table = hierarchy_table,
+        fdr_cutoff = fdr_cutoff,
+        include_descendants = TRUE,
+        filter_descendants_by_gene = TRUE,
+        signal_entrez_genes = sim_data$signal_entrez_genes,
+        pathway2gene = pathway2gene
+      )
+
+      per_pathway_c <- eval_c$per_pathway %>%
+        mutate(method = "Conventional", iteration = i)
+
+      extra_c <- extract_additional_metrics(conventional_result, sim_data, pathway2gene)
+
+      metric_rows[[length(metric_rows) + 1]] <- bind_cols(
+        eval_c$overall %>% mutate(method = "Conventional"),
+        extra_c, iteration = i
+      )
+
+      pathway_rows[[length(pathway_rows) + 1]] <- per_pathway_c
+    }
 
     # --- PathwayVote ---
     vote_result <- pathway_vote(
@@ -88,29 +105,21 @@ run_benchmark_simulations <- function(
       pathway2gene = pathway2gene
     )
 
-    # ---- per-pathway log ----
-    per_pathway_c <- eval_c$per_pathway %>%
-      mutate(method = "Conventional", iteration = i)
-
     per_pathway_v <- eval_v$per_pathway %>%
       mutate(method = "PathwayVote", iteration = i)
 
-    per_pathway_log[[i]] <- bind_rows(per_pathway_c, per_pathway_v)
-
-    # ---- summary metrics ----
-    base_metrics <- bind_rows(
-      eval_c$overall %>% mutate(method = "Conventional"),
-      eval_v$overall %>% mutate(method = "PathwayVote")
-    )
-
-    # ---- additional metrics ----
-    extra_c <- extract_additional_metrics(conventional_result, sim_data, pathway2gene)
     extra_v <- extract_additional_metrics(vote_result$Reactome, sim_data, pathway2gene)
 
-    all_metrics[[i]] <- bind_rows(
-      bind_cols(base_metrics[1, ], extra_c, iteration = i),
-      bind_cols(base_metrics[2, ], extra_v, iteration = i)
+    metric_rows[[length(metric_rows) + 1]] <- bind_cols(
+      eval_v$overall %>% mutate(method = "PathwayVote"),
+      extra_v, iteration = i
     )
+
+    pathway_rows[[length(pathway_rows) + 1]] <- per_pathway_v
+
+    # --- Store ---
+    all_metrics[[i]] <- bind_rows(metric_rows)
+    per_pathway_log[[i]] <- bind_rows(pathway_rows)
   }
 
   return(list(
@@ -118,7 +127,6 @@ run_benchmark_simulations <- function(
     per_pathway_log = bind_rows(per_pathway_log)
   ))
 }
-
 
 cpg2gene_enrichment <- function(ewas_data,
                                 top_k = 1000) {
@@ -464,4 +472,3 @@ select_diverse_top_pathways <- function(hierarchy_table, pathway2gene, n = 7, mi
 
   return(top_ids[selected])
 }
-
