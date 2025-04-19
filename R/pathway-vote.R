@@ -140,13 +140,15 @@ pathway_vote <- function(ewas_data, eQTM,
 
   if (is.null(stat_grid)) {
     stat_vals <- abs(getData(eQTM)$statistics)
-    stat_grid <- round(quantile(stat_vals, probs = seq(0.1, 0.9, length.out = grid_size), na.rm = TRUE), 2)
+    range_stat <- quantile(stat_vals, probs = c(0.05, 0.95), na.rm = TRUE)
+    stat_grid <- round(seq(range_stat[1], range_stat[2], length.out = grid_size), 2)
     if (verbose) message("Auto-selected stat_grid: ", paste(stat_grid, collapse = ", "))
   }
 
   if (is.null(distance_grid)) {
     dist_vals <- getData(eQTM)$distance
-    distance_grid <- round(quantile(dist_vals, probs = seq(0.1, 1, length.out = grid_size), na.rm = TRUE), -3)
+    range_dist <- quantile(dist_vals, probs = c(0.05, 0.95), na.rm = TRUE)
+    distance_grid <- round(seq(range_dist[1], range_dist[2], length.out = grid_size), -3)
     if (verbose) message("Auto-selected distance_grid: ", paste(distance_grid, collapse = ", "))
   }
 
