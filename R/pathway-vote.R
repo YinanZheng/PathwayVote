@@ -73,7 +73,7 @@ pathway_vote <- function(ewas_data, eQTM,
                          overlap_threshold = NULL,
                          fixed_prune = NULL,
                          grid_size = 5,
-                         min_genes_per_hit = 3,
+                         min_genes_per_hit = 2,
                          readable = FALSE,
                          workers = NULL,
                          verbose = FALSE) {
@@ -84,7 +84,7 @@ pathway_vote <- function(ewas_data, eQTM,
     message("Databases: ", paste(databases, collapse = ", "))
   }
 
-  required_pkgs <- c("PathwayVote", "furrr", "future", "ReactomePA", "clusterProfiler", "org.Hs.eg.db")
+  required_pkgs <- c("PathwayVote", "purrr", "furrr", "future", "ReactomePA", "clusterProfiler", "org.Hs.eg.db")
   lapply(required_pkgs, function(pkg) {
     if (!requireNamespace(pkg, quietly = TRUE)) {
       stop("Package '", pkg, "' is required. Please install it first.")
