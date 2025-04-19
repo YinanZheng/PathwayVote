@@ -78,7 +78,7 @@ run_benchmark_simulations <- function(
     )
 
     eval_v <- benchmark_enrichment_results(
-      result_df = vote_result$result_tables$Reactome,
+      result_df = vote_result$Reactome,
       truth_pathway_ids = sim_data$truth_pathway_ids,
       hierarchy_table = hierarchy_table,
       fdr_cutoff = fdr_cutoff,
@@ -105,7 +105,7 @@ run_benchmark_simulations <- function(
 
     # ---- additional metrics ----
     extra_c <- extract_additional_metrics(conventional_result, sim_data, pathway2gene)
-    extra_v <- extract_additional_metrics(vote_result$result_tables$Reactome, sim_data, pathway2gene)
+    extra_v <- extract_additional_metrics(vote_result$Reactome, sim_data, pathway2gene)
 
     all_metrics[[i]] <- bind_rows(
       bind_cols(base_metrics[1, ], extra_c, iteration = i),
