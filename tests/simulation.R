@@ -4,15 +4,9 @@ run_benchmark_simulations <- function(
     hierarchy_table,
     pathway2gene,
     eQTM_db_PathwayVote,
-    voting_params = list(
-      k_values = seq(50, 450, 100),
-      stat_grid = seq(0.05, 0.6, 0.15),
-      distance_grid = seq(10000, 100000, 30000),
-      overlap_threshold = 0.8,
-      min_vote_support = 3,
-      min_genes_per_hit = 2
-    ),
+    voting_params = list(),
     fdr_cutoff = 0.05,
+    workers = 30,
     verbose = TRUE
 ) {
   library(dplyr)
@@ -59,7 +53,7 @@ run_benchmark_simulations <- function(
     )
 
     # --- Conventional ---
-    conventional_result <- cpg2gene_enrichment(sim_data$ewas_data, top_k = max(voting_params$k_values))
+    conventional_result <- cpg2gene_enrichment(sim_data$ewas_data, top_k = max(voting_params$k_grid))
     eval_c <- benchmark_enrichment_results(
       result_df = conventional_result,
       truth_pathway_ids = sim_data$truth_pathway_ids,
@@ -75,16 +69,11 @@ run_benchmark_simulations <- function(
     vote_result <- pathway_vote(
       ewas_data = sim_data$ewas_data,
       eQTM = eQTM_db_PathwayVote,
-      k_values = voting_params$k_values,
-      stat_grid = voting_params$stat_grid,
-      distance_grid = voting_params$distance_grid,
+      k_grid = voting_params$k_grid,
       overlap_threshold = voting_params$overlap_threshold,
       rank_column = "score",
-      use_abs = TRUE,
-      rank_decreasing = TRUE,
-      min_vote_support = voting_params$min_vote_support,
-      min_genes_per_hit = voting_params$min_genes_per_hit,
       databases = "Reactome",
+      workers = workers,
       readable = FALSE,
       verbose = FALSE
     )
