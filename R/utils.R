@@ -49,15 +49,7 @@ jaccard_dist <- function(a, b) {
   length(intersect(a, b)) / length(union(a, b))
 }
 
-adaptive_overlap_threshold <- function(grid_size) {
-  base <- 0.4
-  scale <- 0.65
-  decay <- 0.1
-  value <- base + scale * exp(-decay * grid_size)
-  return(round(value, 3))
-}
-
-select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, overlap_threshold = NULL, verbose = TRUE) {
+select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, overlap_threshold = 0.7, verbose = TRUE) {
   all_genes <- unlist(gene_lists)
   gene_freq <- table(all_genes)
 
@@ -81,16 +73,6 @@ select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, overlap_th
         pairwise_jaccard <- c(pairwise_jaccard, jval)
       }
     }
-  }
-
-  if (length(pairwise_jaccard) >= 3) {
-    if (is.null(overlap_threshold)) {
-      overlap_threshold <- adaptive_overlap_threshold(grid_size)
-    }
-    if (verbose) message(sprintf("Adaptive overlap threshold set to %.3f", overlap_threshold))
-  } else {
-    overlap_threshold <- 0.618  # fallback
-    if (verbose) message("Not enough gene lists for adaptive thresholding. Using fixed threshold = 0.618.")
   }
 
   remaining <- seq_along(gene_lists)

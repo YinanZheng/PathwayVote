@@ -13,7 +13,8 @@ pathway_vote(
   distance_grid = NULL,
   fixed_prune = NULL,
   grid_size = 5,
-  min_genes_per_hit = 3,
+  min_genes_per_hit = 2,
+  overlap_threshold = 0.7,
   readable = FALSE,
   workers = NULL,
   verbose = FALSE
@@ -36,7 +37,10 @@ pathway_vote(
 
 \item{grid_size}{Integer. Number of values in each grid when auto-generating. Default is 5.}
 
-\item{min_genes_per_hit}{Minimum number of genes (`Count`) a pathway must include to be considered.}
+\item{min_genes_per_hit}{Minimum number of genes (`Count`) a pathway must include to be considered. Default is 2.}
+
+\item{overlap_threshold}{Numeric between 0 and 1. Controls the maximum allowed Jaccard similarity between gene lists during redundancy filtering.
+Defualt is 0.7, which provides robust and stable results across a variety of simulation scenarios.}
 
 \item{readable}{Logical. whether to convert Entrez IDs to gene symbols in enrichment results.}
 

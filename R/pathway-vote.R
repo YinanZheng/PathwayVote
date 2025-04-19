@@ -26,7 +26,9 @@
 #' @param distance_grid A numeric vector of CpG-gene distance thresholds (in base pairs). If NULL, generated similarly.
 #' @param fixed_prune Integer or NULL. Minimum number of votes to retain a pathway. If NULL, will use cuberoot(N) where N is the number of enrichment runs.
 #' @param grid_size Integer. Number of values in each grid when auto-generating. Default is 5.
-#' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include to be considered.
+#' @param min_genes_per_hit Minimum number of genes (`Count`) a pathway must include to be considered. Default is 2.
+#' @param overlap_threshold Numeric between 0 and 1. Controls the maximum allowed Jaccard similarity between gene lists during redundancy filtering.
+#' Defualt is 0.7, which provides robust and stable results across a variety of simulation scenarios.
 #' @param workers Optional integer. Number of parallel workers. If NULL, use 2 logical cores.
 #' @param readable Logical. whether to convert Entrez IDs to gene symbols in enrichment results.
 #' @param verbose Logical. whether to print progress messages.
@@ -70,10 +72,10 @@ pathway_vote <- function(ewas_data, eQTM,
                          k_grid = NULL,
                          stat_grid = NULL,
                          distance_grid = NULL,
-                         overlap_threshold = NULL,
                          fixed_prune = NULL,
                          grid_size = 5,
                          min_genes_per_hit = 2,
+                         overlap_threshold = 0.7,
                          readable = FALSE,
                          workers = NULL,
                          verbose = FALSE) {
