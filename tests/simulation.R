@@ -71,7 +71,6 @@ run_benchmark_simulations <- function(
       eQTM = eQTM_db_PathwayVote,
       k_grid = voting_params$k_grid,
       overlap_threshold = voting_params$overlap_threshold,
-      rank_column = "score",
       databases = "Reactome",
       workers = workers,
       readable = FALSE,
@@ -122,10 +121,7 @@ run_benchmark_simulations <- function(
 
 
 cpg2gene_enrichment <- function(ewas_data,
-                                top_k = 1000,
-                                rank_column = "score",
-                                rank_decreasing = TRUE,
-                                use_abs = TRUE) {
+                                top_k = 1000) {
   suppressMessages({
     library(minfi)
     library(AnnotationDbi)
@@ -136,12 +132,8 @@ cpg2gene_enrichment <- function(ewas_data,
 
   ann <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
 
-  if (!rank_column %in% colnames(ewas_data)) {
-    stop("Column '", rank_column, "' not found in ewas_data")
-  }
-
-  ranking_values <- if (use_abs) abs(ewas_data[[rank_column]]) else ewas_data[[rank_column]]
-  top_cpgs <- head(ewas_data$cpg[order(ranking_values, decreasing = rank_decreasing)], top_k)
+  ranking_values <- abs(ewas_data[["score"]])
+  top_cpgs <- head(ewas_data$cpg[order(ranking_values, decreasing = TRUE)], top_k)
 
   top_genes <- ann[top_cpgs, "UCSC_RefGene_Name"]
   gene_symbols <- unique(unlist(strsplit(na.omit(top_genes), ";")))
