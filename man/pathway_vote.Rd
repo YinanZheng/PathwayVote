@@ -94,13 +94,4 @@ eqtm_data <- data.frame(
 )
 eqtm_obj <- create_eQTM(eqtm_data)
 
-results <- pathway_vote(
-  ewas_data = ewas,
-  eQTM = eqtm_obj,
-  databases = c("KEGG"),
-  worker = 1, # If not specified, will use 2 cores by default
-  verbose = TRUE
-)
-head(results$KEGG)
-
 }

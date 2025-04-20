@@ -70,15 +70,6 @@
 #' )
 #' eqtm_obj <- create_eQTM(eqtm_data)
 #'
-#' results <- pathway_vote(
-#'   ewas_data = ewas,
-#'   eQTM = eqtm_obj,
-#'   databases = c("KEGG"),
-#'   worker = 1, # If not specified, will use 2 cores by default
-#'   verbose = TRUE
-#' )
-#' head(results$KEGG)
-#'
 #' @export
 #'
 pathway_vote <- function(ewas_data, eQTM,
@@ -188,7 +179,7 @@ pathway_vote <- function(ewas_data, eQTM,
     # Step 1: Generate all candidate gene lists
     raw_results <- generate_gene_lists_grid(eQTM_subset, stat_grid, distance_grid, verbose = verbose)
 
-    # Step 2: Apply entropy + stability-based pruning
+    # Step 2: Apply entropy + stability-based + probe bias correction pruning
     entropy_filtered_lists <- select_gene_lists_entropy_auto(
       gene_lists = raw_results$gene_lists,
       grid_size = grid_size,
