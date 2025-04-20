@@ -55,11 +55,13 @@ columns: `ID`, `p.adjust`, `Description`, and `geneID`.
 }
 \description{
 Performs pathway enrichment analysis using a voting-based framework that integrates
-CpG-gene regulatory information from expression quantitative trait methylation (eQTM) data.
-For a grid of top-ranked CpGs and filtering thresholds, gene sets are generated and filtered using
-an entropy-based pruning strategy that balances information richness and stability. Enrichment results
-across parameter combinations are aggregated using a voting scheme, prioritizing
-pathways that consistently appear under diverse settings.
+CpG–gene regulatory information from expression quantitative trait methylation (eQTM) data.
+For a grid of top-ranked CpGs and filtering thresholds, gene sets are generated and refined using
+an entropy-based pruning strategy that balances information richness, stability, and probe bias correction.
+In particular, gene lists dominated by genes with disproportionately high numbers of CpG mappings
+are penalized to mitigate active probe bias—a common artifact in methylation data analysis.
+Enrichment results across parameter combinations are then aggregated using a voting scheme,
+prioritizing pathways that are consistently recovered under diverse settings and robust to parameter perturbations.
 }
 \examples{
 set.seed(123)
