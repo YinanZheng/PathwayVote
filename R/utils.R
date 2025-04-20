@@ -61,19 +61,12 @@ select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, overlap_th
     mean(sapply(setdiff(seq_along(gene_lists), i), function(j) 1 - jaccard_dist(gene_lists[[i]], gene_lists[[j]])))
   })
 
-  total_score <- scale(entropy_score) - scale(instability)
+  gene_probe_count <- table(unlist(gene_lists))
+  penalty_score <- sapply(gene_lists, function(gset) {
+    sum(log1p(gene_probe_count[gset]), na.rm = TRUE)
+  })
 
-  # ---- Adaptive overlap threshold based on pairwise Jaccard ----
-  pairwise_jaccard <- c()
-  N <- length(gene_lists)
-  if (N >= 2) {
-    for (i in 1:(N - 1)) {
-      for (j in (i + 1):N) {
-        jval <- jaccard_dist(gene_lists[[i]], gene_lists[[j]])
-        pairwise_jaccard <- c(pairwise_jaccard, jval)
-      }
-    }
-  }
+  total_score <- scale(entropy_score) - scale(instability) - scale(penalty_score)
 
   remaining <- seq_along(gene_lists)
   selected <- c()
@@ -120,17 +113,6 @@ run_enrichment <- function(gene_list, databases, readable = FALSE, verbose = FAL
   }
   if (verbose) message("  Enrichment completed.")
   return(enrich_results)
-}
-
-gene_filter <- function(eQTM, stat_threshold, distance) {
-  if (!inherits(eQTM, "eQTM")) {
-    stop("eQTM must be an eQTM object")
-  }
-  eQTM_data <- getData(eQTM)
-
-  eQTM_filtered <- eQTM_data[abs(eQTM_data$statistics) >= stat_threshold & eQTM_data$distance <= distance, ]
-
-  return(list(entrez = unique(na.omit(eQTM_filtered$entrez)), p_values = eQTM_filtered$p_value))
 }
 
 generate_gene_lists_grid <- function(eQTM, stat_grid, distance_grid, verbose = FALSE) {
