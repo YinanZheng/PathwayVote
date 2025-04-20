@@ -20,11 +20,15 @@
 #' Enrichment results across parameter combinations are then aggregated using a voting scheme,
 #' prioritizing pathways that are consistently recovered under diverse settings and robust to parameter perturbations.
 #'
-#' @param ewas_data A data.frame with columns: `cpg` and a numeric ranking column (e.g., p-value, t-statistics, variable importance). The second column will be used as the ranking metric.
-#' @param eQTM An eQTM object containing eQTM data.
+#' @param ewas_data A data.frame containing CpG-level association results. The first column must contain CpG probe IDs,
+#' which will be matched against the eQTM object. The second column should contain a numeric ranking metric, such as a p-value, t-statistic, or
+#' feature importance score.
+#' @param eQTM An \code{eQTM} object containing CpG–gene linkage information, created by the \code{create_eQTM()} function. This object provides
+#' the CpG-to-gene mapping used for pathway inference.
 #' @param databases A character vector of pathway databases. Supporting: "Reactome", "KEGG", and "GO".
-#' @param k_grid A numeric vector of top-k CpGs used for gene set construction. If NULL, the grid is automatically inferred using a log-scaled range guided by the number of CpGs passing FDR < 0.05.
-#' Note: This requires that \code{ewas_data} contains raw p-values (second column); for other metrics (e.g., t-statistic or importance scores), \code{k_grid} must be provided manually.
+#' @param k_grid A numeric vector of top-k CpGs used for gene set construction. If NULL, the grid is automatically inferred using a log-scaled range
+#' guided by the number of CpGs passing FDR < 0.05. Note: This requires that \code{ewas_data} contains raw p-values (second column) from an association analysis;
+#' for other metrics (e.g., t-statistic or importance scores), \code{k_grid} must be provided manually.
 #' @param stat_grid A numeric vector of eQTM statistic thresholds. If NULL, generated based on quantiles of the observed distribution.
 #' @param distance_grid A numeric vector of CpG-gene distance thresholds (in base pairs). If NULL, generated similarly.
 #' @param fixed_prune Integer or NULL. Minimum number of votes to retain a pathway. If NULL, will use cuberoot(N) where N is the number of enrichment runs.
@@ -44,26 +48,33 @@
 #' set.seed(123)
 #'
 #' # Simulated EWAS result: a mix of signal and noise
-#' ewas_data <- data.frame(
-#'   cpg = paste0("cg", sprintf("%06d", 1:20)),
-#'   p_value = c(runif(5, 1e-5, 0.001), runif(5, 0.01, 0.05), runif(10, 0.1, 1))
+#' n_cpg <- 500
+#' ewas <- data.frame(
+#'   cpg = paste0("cg", sprintf("%08d", 1:n_cpg)),
+#'   p_value = c(runif(n_cpg*0.1, 1e-9, 1e-5), runif(n_cpg*0.2, 1e-3, 0.05), runif(n_cpg*0.7, 0.05, 1))
 #' )
 #'
 #' # Corresponding eQTM mapping (some of these CpGs have gene links)
+#' signal_genes <- c("5290", "673", "1956", "7157", "7422")
+#' background_genes <- as.character(1000:9999)
+#' entrez_signal <- sample(signal_genes, n_cpg * 0.1, replace = TRUE)
+#' entrez_background <- sample(setdiff(background_genes, signal_genes), n_cpg * 0.9, replace = TRUE)
+#'
 #' eqtm_data <- data.frame(
-#'   cpg = ewas_data$cpg,
-#'   statistics = rnorm(20, mean = 2, sd = 1),
-#'   p_value = runif(20, 0.001, 0.05),
-#'   distance = sample(1000:100000, 20),
-#'   entrez = rep(c("5290", "673", "1956", "7157", "7422"), length.out = 20)
+#'   cpg = ewas$cpg,
+#'   statistics = rnorm(n_cpg, mean = 2, sd = 1),
+#'   p_value = runif(n_cpg, min = 0.001, max = 0.05),
+#'   distance = sample(1000:100000, n_cpg, replace = TRUE),
+#'   entrez = c(entrez_signal, entrez_background),
+#'   stringsAsFactors = FALSE
 #' )
 #' eqtm_obj <- create_eQTM(eqtm_data)
 #'
 #' results <- pathway_vote(
-#'   ewas_data = data,
+#'   ewas_data = ewas,
 #'   eQTM = eqtm_obj,
 #'   databases = c("KEGG"),
-#'   worker = NULL, # If not specified, will use 2 cores by default
+#'   worker = 1, # If not specified, will use 2 cores by default
 #'   verbose = TRUE
 #' )
 #' head(results$KEGG)
@@ -118,9 +129,9 @@ pathway_vote <- function(ewas_data, eQTM,
   }
 
   if (!inherits(eQTM, "eQTM")) stop("eQTM must be an eQTM object")
-  if (!"cpg" %in% colnames(ewas_data)) stop("ewas_data must contain a 'cpg' column.")
+  if (!check_ewas_cpg_match(ewas_data, eQTM)) stop("First column of `ewas_data` does not match CpG IDs in eQTM object. Please verify your input.")
   if (all(is.na(getData(eQTM)$entrez))) stop("Entrez IDs are required for pathway analysis")
-  if (ncol(ewas_data) < 2) stop("ewas_data must have at least two columns: 'cpg' and a ranking column")
+  if (ncol(ewas_data) < 2) stop("ewas_data must have at least two columns: CpG ID (first column) and a ranking column")
 
   # Automatically use the second column as ranking
   rank_column <- colnames(ewas_data)[2]
@@ -144,7 +155,7 @@ pathway_vote <- function(ewas_data, eQTM,
       stop("Automatic k_grid generation is only supported when ewas_data contains p-values (second column). ",
            "Please provide k_grid manually for other ranking metrics.")
     }
-    k_grid <- generate_k_grid_fdr_guided(ewas_data, rank_column, rank_decreasing, grid_size, verbose)
+    k_grid <- generate_k_grid_fdr_guided(ewas_data, rank_column, grid_size, verbose = verbose)
   }
 
   if (is.null(stat_grid)) {
@@ -201,10 +212,22 @@ pathway_vote <- function(ewas_data, eQTM,
   }
 
   if (verbose) message(sprintf("Gene filtering completed. %d valid combinations retained.", valid_combination_count))
-  if (verbose) message("Running enrichment analysis...")
 
   gene_lists <- lapply(all_gene_sets, function(x) x$gene_list)
 
+  universe_genes <- unique(na.omit(getData(eQTM)$entrez))
+
+  annotation_data <- prepare_annotation_data(databases)
+  reactome_data <- annotation_data$reactome_data
+  go_data <- annotation_data$go_data
+  kegg_data <- annotation_data$kegg_data
+
+  if (verbose) {
+    loaded_anno <- names(Filter(Negate(is.null), annotation_data))
+    message("Annotation data prepared: ", paste(loaded_anno, collapse = ", "))
+  }
+
+  if (verbose) message("Running enrichment analysis...")
   enrich_results <- furrr::future_map(
     gene_lists,
     function(glist) {
@@ -212,17 +235,19 @@ pathway_vote <- function(ewas_data, eQTM,
         run_enrichment(
           gene_list = glist,
           databases = databases,
+          universe = universe_genes,
           readable = readable,
-          verbose = FALSE
+          verbose = FALSE,
+          reactome_data = reactome_data,
+          go_data = go_data,
+          kegg_data = kegg_data
         )
       }, error = function(e) {
         warning("Enrichment failed for gene list ", paste(head(glist, 5), collapse = ","), ": ", conditionMessage(e))
         NULL
       })
     },
-    .options = furrr::furrr_options(
-      seed = TRUE
-    )
+    .options = furrr::furrr_options(seed = TRUE)
   )
 
   # Will use cube-root(N) if fixed_prune is NULL

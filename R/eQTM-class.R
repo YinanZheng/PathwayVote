@@ -115,7 +115,7 @@ create_eQTM <- function(data, metadata = list()) {
 
     n_missing <- sum(is.na(data$entrez))
     if (n_missing > 0) {
-      warning(sprintf("Entrez ID conversion failed for %d Ensembl IDs (%.2f%%).", n_missing, 100 * n_missing / nrow(data)))
+      message(sprintf("Entrez ID conversion failed for %d Ensembl IDs (%.2f%%).", n_missing, 100 * n_missing / nrow(data)))
     }
 
   } else if (all(is.na(data$ensembl)) && !all(is.na(data$entrez))) {
@@ -131,7 +131,7 @@ create_eQTM <- function(data, metadata = list()) {
 
     n_missing <- sum(is.na(data$ensembl))
     if (n_missing > 0) {
-      warning(sprintf("Ensembl ID conversion failed for %d Entrez IDs (%.2f%%).", n_missing, 100 * n_missing / nrow(data)))
+      message(sprintf("Ensembl ID conversion failed for %d Entrez IDs (%.2f%%).", n_missing, 100 * n_missing / nrow(data)))
     }
   } else {
     # Both provided: do nothing

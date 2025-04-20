@@ -12,10 +12,17 @@ safe_setup_plan <- function(workers) {
   })
 }
 
+check_ewas_cpg_match <- function(ewas_data, eqtm, threshold = 0.8) {
+  ewas_ids <- ewas_data[[1]]
+  eqtm_cpgs <- getData(eqtm)$cpg
+  match_rate <- mean(ewas_ids %in% eqtm_cpgs, na.rm = TRUE)
+  match_rate >= threshold
+}
+
 generate_k_grid_fdr_guided <- function(ewas_data,
                                        rank_column,
-                                       fdr_cutoff = 0.05,
                                        grid_size = 5,
+                                       fdr_cutoff = 0.05,
                                        expand_factor = exp(1),
                                        verbose = FALSE) {
   pvals <- ewas_data[[rank_column]]
@@ -91,28 +98,105 @@ select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, overlap_th
   return(gene_lists[selected])
 }
 
-run_enrichment <- function(gene_list, databases, readable = FALSE, verbose = FALSE) {
+prepare_annotation_data <- function(databases) {
+  list(
+    reactome_data = if ("Reactome" %in% databases) ReactomePA:::get_Reactome_DATA("human") else NULL,
+    go_data = if ("GO" %in% databases) clusterProfiler:::get_GO_data(org.Hs.eg.db, "ALL", "ENTREZID") else NULL,
+    kegg_data = if ("KEGG" %in% databases) clusterProfiler:::prepare_KEGG("hsa") else NULL
+  )
+}
+
+run_enrichment <- function(gene_list,
+                           databases = c("Reactome", "GO", "KEGG"),
+                           universe = NULL,
+                           readable = FALSE,
+                           verbose = FALSE,
+                           reactome_data = NULL,
+                           go_data = NULL,
+                           kegg_data = NULL) {
   enrich_results <- list()
+
   if ("Reactome" %in% databases) {
     if (verbose) message("  Analyzing Reactome...")
-    enrich_results$Reactome <- as.data.frame(
-      enrichPathway(gene = gene_list, organism = "human", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH", readable = readable)
+
+    res <- clusterProfiler:::enricher_internal(
+      gene = gene_list,
+      universe = universe,
+      pvalueCutoff = 1,
+      pAdjustMethod = "BH",
+      qvalueCutoff = 1,
+      minGSSize = 10,
+      maxGSSize = 500,
+      USER_DATA = reactome_data
     )
+
+    if (!is.null(res)) {
+      res@keytype <- "ENTREZID"
+      res@organism <- "human"
+      res@ontology <- "Reactome"
+      if (readable) {
+        res <- setReadable(res, OrgDb = org.Hs.eg.db)
+      }
+      enrich_results$Reactome <- as.data.frame(res)
+    } else {
+      enrich_results$Reactome <- NULL
+    }
   }
+
   if ("GO" %in% databases) {
     if (verbose) message("  Analyzing GO...")
-    enrich_results$GO <- as.data.frame(
-      enrichGO(gene = gene_list, OrgDb = org.Hs.eg.db, ont = "ALL", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH", readable = readable)
+
+    res <- clusterProfiler:::enricher_internal(
+      gene = gene_list,
+      universe = universe,
+      pvalueCutoff = 1,
+      pAdjustMethod = "BH",
+      qvalueCutoff = 1,
+      minGSSize = 10,
+      maxGSSize = 500,
+      USER_DATA = go_data
     )
+
+    if (!is.null(res)) {
+      res@keytype <- "ENTREZID"
+      res@organism <- "Homo sapiens"
+      res@ontology <- "GO"
+      if (readable) {
+        res <- setReadable(res, OrgDb = org.Hs.eg.db)
+      }
+      enrich_results$GO <- as.data.frame(res)
+    } else {
+      enrich_results$GO <- NULL
+    }
   }
+
   if ("KEGG" %in% databases) {
     if (verbose) message("  Analyzing KEGG...")
-    kegg_enrich <- enrichKEGG(gene = gene_list, organism = "hsa", pvalueCutoff = 1, qvalueCutoff = 1, pAdjustMethod = "BH")
-    if (readable) {
-      kegg_enrich <- setReadable(kegg_enrich, OrgDb = org.Hs.eg.db, keyType = "ENTREZID")
+
+    res <- clusterProfiler:::enricher_internal(
+      gene = gene_list,
+      universe = universe,
+      pvalueCutoff = 1,
+      pAdjustMethod = "BH",
+      qvalueCutoff = 1,
+      minGSSize = 10,
+      maxGSSize = 500,
+      USER_DATA = kegg_data
+    )
+
+    if (!is.null(res)) {
+      res@keytype <- "ENTREZID"
+      res@organism <- "hsa"
+      res@ontology <- "KEGG"
+      if (readable) {
+        res <- setReadable(res, OrgDb = org.Hs.eg.db)
+      }
+      enrich_results$KEGG <- as.data.frame(res)
+    } else {
+      enrich_results$KEGG <- NULL
     }
-    enrich_results$KEGG <- as.data.frame(kegg_enrich)
   }
+
   if (verbose) message("  Enrichment completed.")
   return(enrich_results)
 }
