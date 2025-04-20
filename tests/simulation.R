@@ -14,13 +14,13 @@ extract_additional_metrics <- function(result_df, sim_data, pathway2gene, fdr_cu
 
 run_benchmark_simulations <- function(
     n_repeats = 100,
-    seed_base = 20240407,
+    seed_base = 100,
     hierarchy_table,
     pathway2gene,
     eQTM_db_PathwayVote,
     voting_params = list(),
     fdr_cutoff = 0.05,
-    workers = 30,
+    workers = 16,
     PathwayVoteOnly = FALSE,
     verbose = TRUE
 ) {
@@ -30,7 +30,7 @@ run_benchmark_simulations <- function(
 
   all_metrics <- list()
   per_pathway_log <- list()
-  cpg2entrez_map <- prepare_cpg2entrez_map()
+  cpg2entrez_map <- readRDS("~/PathwayVote/cpg2entrez_map.RDS")
 
   for (i in seq_len(n_repeats)) {
     seed <- seed_base + i
@@ -126,39 +126,6 @@ run_benchmark_simulations <- function(
     all_metrics = bind_rows(all_metrics),
     per_pathway_log = bind_rows(per_pathway_log)
   ))
-}
-
-prepare_cpg2entrez_map <- function() {
-  suppressMessages({
-    library(minfi)
-    library(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
-    library(org.Hs.eg.db)
-    library(AnnotationDbi)
-  })
-
-  ann <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
-  cpg2symbol <- ann[, "UCSC_RefGene_Name"]
-  names(cpg2symbol) <- rownames(ann)
-
-  symbol_vec <- unique(unlist(strsplit(na.omit(cpg2symbol), ";")))
-  symbol_vec <- symbol_vec[symbol_vec != ""]
-
-  symbol2entrez <- mapIds(org.Hs.eg.db,
-                          keys = symbol_vec,
-                          column = "ENTREZID",
-                          keytype = "SYMBOL",
-                          multiVals = "first")
-
-  mapping_list <- lapply(names(cpg2symbol), function(cpg) {
-    syms <- unlist(strsplit(cpg2symbol[[cpg]], ";"))
-    syms <- syms[syms != ""]
-    entrez <- symbol2entrez[syms]
-    entrez <- entrez[!is.na(entrez)]
-    return(unique(entrez))
-  })
-  names(mapping_list) <- names(cpg2symbol)
-
-  return(mapping_list)
 }
 
 cpg2gene_enrichment <- function(cpg_vector,
