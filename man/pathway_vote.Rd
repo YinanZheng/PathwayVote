@@ -27,7 +27,8 @@ pathway_vote(
 
 \item{databases}{A character vector of pathway databases. Supporting: "Reactome", "KEGG", and "GO".}
 
-\item{k_grid}{A numeric vector of top-k CpGs to consider for gene set construction. If NULL, automatically inferred based on inflection point detection from the ranking curve.}
+\item{k_grid}{A numeric vector of top-k CpGs used for gene set construction. If NULL, the grid is automatically inferred using a log-scaled range guided by the number of CpGs passing FDR < 0.05.
+Note: This requires that \code{ewas_data} contains raw p-values (second column); for other metrics (e.g., t-statistic or importance scores), \code{k_grid} must be provided manually.}
 
 \item{stat_grid}{A numeric vector of eQTM statistic thresholds. If NULL, generated based on quantiles of the observed distribution.}
 

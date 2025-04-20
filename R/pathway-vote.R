@@ -23,7 +23,8 @@
 #' @param ewas_data A data.frame with columns: `cpg` and a numeric ranking column (e.g., p-value, t-statistics, variable importance). The second column will be used as the ranking metric.
 #' @param eQTM An eQTM object containing eQTM data.
 #' @param databases A character vector of pathway databases. Supporting: "Reactome", "KEGG", and "GO".
-#' @param k_grid A numeric vector of top-k CpGs to consider for gene set construction. If NULL, automatically inferred based on inflection point detection from the ranking curve.
+#' @param k_grid A numeric vector of top-k CpGs used for gene set construction. If NULL, the grid is automatically inferred using a log-scaled range guided by the number of CpGs passing FDR < 0.05.
+#' Note: This requires that \code{ewas_data} contains raw p-values (second column); for other metrics (e.g., t-statistic or importance scores), \code{k_grid} must be provided manually.
 #' @param stat_grid A numeric vector of eQTM statistic thresholds. If NULL, generated based on quantiles of the observed distribution.
 #' @param distance_grid A numeric vector of CpG-gene distance thresholds (in base pairs). If NULL, generated similarly.
 #' @param fixed_prune Integer or NULL. Minimum number of votes to retain a pathway. If NULL, will use cuberoot(N) where N is the number of enrichment runs.
@@ -139,7 +140,11 @@ pathway_vote <- function(ewas_data, eQTM,
   }
 
   if (is.null(k_grid)) {
-    k_grid <- auto_generate_k_grid_inflection(ewas_data, rank_column, rank_decreasing, grid_size, verbose)
+    if (!is_pval_like) {
+      stop("Automatic k_grid generation is only supported when ewas_data contains p-values (second column). ",
+           "Please provide k_grid manually for other ranking metrics.")
+    }
+    k_grid <- generate_k_grid_fdr_guided(ewas_data, rank_column, rank_decreasing, grid_size, verbose)
   }
 
   if (is.null(stat_grid)) {

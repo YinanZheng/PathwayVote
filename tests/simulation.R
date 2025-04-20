@@ -89,6 +89,7 @@ run_benchmark_simulations <- function(
       eQTM = eQTM_db_PathwayVote,
       k_grid = voting_params$k_grid,
       overlap_threshold = voting_params$overlap_threshold,
+      grid_size = voting_params$grid_size,
       databases = "Reactome",
       workers = workers,
       readable = FALSE,

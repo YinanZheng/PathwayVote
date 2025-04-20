@@ -12,36 +12,38 @@ safe_setup_plan <- function(workers) {
   })
 }
 
-auto_generate_k_grid_inflection <- function(ewas_data, rank_column = "p_value", rank_decreasing = FALSE,
-                                            grid_size = 5, verbose = FALSE) {
-  x <- ewas_data[[rank_column]]
-  x <- if (rank_decreasing) sort(x, decreasing = TRUE) else sort(x)
+generate_k_grid_fdr_guided <- function(ewas_data,
+                                       rank_column,
+                                       fdr_cutoff = 0.05,
+                                       grid_size = 5,
+                                       expand_factor = exp(1),
+                                       verbose = FALSE) {
+  pvals <- ewas_data[[rank_column]]
+  fdr_vals <- p.adjust(pvals, method = "BH")
 
-  signal <- if (rank_column == "p_value") -log10(x + 1e-300) else abs(x)
-  N <- length(signal)
+  sig_indices <- which(fdr_vals <= fdr_cutoff)
+  n_sig <- length(sig_indices)
 
-  if (N < 10) {
-    k_grid <- seq(2, N, by = 1)
-    if (verbose) message("Fallback: small sample size, k_grid = ", paste(k_grid, collapse = ", "))
-    return(k_grid)
+  if (n_sig < 10) {
+    stop(paste0(
+      "FDR-guided k_grid generation aborted: only ", n_sig,
+      " CpGs passed FDR < ", fdr_cutoff, ".\n",
+      "You may explicitly specify `k_grid` manually if you wish to continue, ",
+      "but enrichment results may be unreliable due to extremely weak signal."
+    ))
   }
 
-  delta <- diff(signal)
-  drop_rate <- delta / head(signal, -1)
-  smoothed <- stats::filter(drop_rate, rep(1/5, 5), sides = 1)
+  max_k <- min(length(pvals), ceiling(n_sig * expand_factor))
+  min_k <- floor(n_sig * 0.25)
 
-  inflection <- which(smoothed > -1e-2)[1]
-  if (is.na(inflection) || inflection < 10) {
-    k_grid <- unique(round(seq(2, N, length.out = min(grid_size, N - 1))))
-    if (verbose) message("Fallback: inflection too early, using fallback k_grid = ", paste(k_grid, collapse = ", "))
-    return(k_grid)
+  # Use log scale to spread grid between min_k and max_k
+  k_grid <- round(exp(seq(log(min_k), log(max_k), length.out = grid_size)))
+
+  if (verbose) {
+    message("FDR-guided k_grid: ", paste(k_grid, collapse = ", "),
+            " (n_sig = ", n_sig, ")")
   }
 
-  num_pts <- min(grid_size, inflection - 10 + 1)
-  k_grid <- unique(round(seq(10, inflection, length.out = num_pts)))
-  k_grid <- k_grid[k_grid >= 2 & k_grid <= N]
-
-  if (verbose) message("Auto-selected k_grid (inflection-based): ", paste(k_grid, collapse = ", "))
   return(k_grid)
 }
 
@@ -49,7 +51,7 @@ jaccard_dist <- function(a, b) {
   length(intersect(a, b)) / length(union(a, b))
 }
 
-select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, overlap_threshold = 0.7, verbose = TRUE) {
+select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, overlap_threshold = 0.7, verbose = FALSE) {
   all_genes <- unlist(gene_lists)
   gene_freq <- table(all_genes)
 
@@ -261,7 +263,7 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
 prune_pathways_by_vote <- function(enrich_results,
                                    fixed_prune = 3,
                                    min_genes = 2,
-                                   verbose = TRUE) {
+                                   verbose = FALSE) {
   n_runs <- length(enrich_results)
   min_vote_support <- if (is.null(fixed_prune)) {
     max(1, floor(n_runs^(1/3)))
