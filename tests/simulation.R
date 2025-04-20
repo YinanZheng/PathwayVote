@@ -1,3 +1,17 @@
+extract_additional_metrics <- function(result_df, sim_data, pathway2gene, fdr_cutoff = 0.05) {
+  detected_pathways <- result_df$ID[result_df$p.adjust <= fdr_cutoff]
+  pathway_sizes <- sapply(detected_pathways, function(pid) length(pathway2gene[[pid]]))
+  avg_pathway_size <- mean(pathway_sizes)
+
+  covered_genes <- unique(unlist(strsplit(result_df$geneID[result_df$p.adjust <= fdr_cutoff], "/")))
+  coverage_rate <- length(intersect(covered_genes, sim_data$signal_entrez_genes)) / length(sim_data$signal_entrez_genes)
+
+  tibble(
+    avg_pathway_size = avg_pathway_size,
+    signal_gene_coverage = coverage_rate
+  )
+}
+
 run_benchmark_simulations <- function(
     n_repeats = 100,
     seed_base = 20240407,
@@ -16,24 +30,11 @@ run_benchmark_simulations <- function(
 
   all_metrics <- list()
   per_pathway_log <- list()
-
-  extract_additional_metrics <- function(result_df, sim_data, pathway2gene, fdr_cutoff = 0.05) {
-    detected_pathways <- result_df$ID[result_df$p.adjust <= fdr_cutoff]
-    pathway_sizes <- sapply(detected_pathways, function(pid) length(pathway2gene[[pid]]))
-    avg_pathway_size <- mean(pathway_sizes)
-
-    covered_genes <- unique(unlist(strsplit(result_df$geneID[result_df$p.adjust <= fdr_cutoff], "/")))
-    coverage_rate <- length(intersect(covered_genes, sim_data$signal_entrez_genes)) / length(sim_data$signal_entrez_genes)
-
-    tibble(
-      avg_pathway_size = avg_pathway_size,
-      signal_gene_coverage = coverage_rate
-    )
-  }
+  cpg2entrez_map <- prepare_cpg2entrez_map()
 
   for (i in seq_len(n_repeats)) {
     seed <- seed_base + i
-    if (verbose) message("🧪 Running simulation ", i, " (seed = ", seed, ")")
+    if (verbose) message("Running simulation ", i, " (seed = ", seed, ")")
 
     pathway_info <- as.list(select_diverse_top_pathways(hierarchy_table, pathway2gene, seed = seed))
     sim_data <- simulate_benchmark_dataset(
@@ -56,7 +57,7 @@ run_benchmark_simulations <- function(
 
     # --- Optional Conventional ---
     if (!PathwayVoteOnly) {
-      conventional_result <- cpg2gene_enrichment(sim_data$ewas_data, top_k = max(voting_params$k_grid))
+      conventional_result <- cpg2gene_enrichment(sim_data$ewas_data, cpg2entrez_map = cpg2entrez_map, top_k = max(voting_params$k_grid))
 
       eval_c <- benchmark_enrichment_results(
         result_df = conventional_result,
@@ -117,7 +118,6 @@ run_benchmark_simulations <- function(
 
     pathway_rows[[length(pathway_rows) + 1]] <- per_pathway_v
 
-    # --- Store ---
     all_metrics[[i]] <- bind_rows(metric_rows)
     per_pathway_log[[i]] <- bind_rows(pathway_rows)
   }
@@ -128,30 +128,48 @@ run_benchmark_simulations <- function(
   ))
 }
 
-cpg2gene_enrichment <- function(ewas_data,
-                                top_k = 1000) {
+prepare_cpg2entrez_map <- function() {
   suppressMessages({
     library(minfi)
-    library(AnnotationDbi)
-    library(org.Hs.eg.db)
-    library(ReactomePA)
     library(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+    library(org.Hs.eg.db)
+    library(AnnotationDbi)
   })
 
   ann <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+  cpg2symbol <- ann[, "UCSC_RefGene_Name"]
+  names(cpg2symbol) <- rownames(ann)
 
-  ranking_values <- abs(ewas_data[["score"]])
-  top_cpgs <- head(ewas_data$cpg[order(ranking_values, decreasing = TRUE)], top_k)
+  symbol_vec <- unique(unlist(strsplit(na.omit(cpg2symbol), ";")))
+  symbol_vec <- symbol_vec[symbol_vec != ""]
 
-  top_genes <- ann[top_cpgs, "UCSC_RefGene_Name"]
-  gene_symbols <- unique(unlist(strsplit(na.omit(top_genes), ";")))
-  gene_symbols <- gene_symbols[gene_symbols != ""]
+  symbol2entrez <- mapIds(org.Hs.eg.db,
+                          keys = symbol_vec,
+                          column = "ENTREZID",
+                          keytype = "SYMBOL",
+                          multiVals = "first")
 
-  entrez_ids <- mapIds(org.Hs.eg.db,
-                       keys = gene_symbols,
-                       column = "ENTREZID",
-                       keytype = "SYMBOL",
-                       multiVals = "first")
+  mapping_list <- lapply(names(cpg2symbol), function(cpg) {
+    syms <- unlist(strsplit(cpg2symbol[[cpg]], ";"))
+    syms <- syms[syms != ""]
+    entrez <- symbol2entrez[syms]
+    entrez <- entrez[!is.na(entrez)]
+    return(unique(entrez))
+  })
+  names(mapping_list) <- names(cpg2symbol)
+
+  return(mapping_list)
+}
+
+cpg2gene_enrichment <- function(cpg_vector,
+                                cpg2entrez_map,
+                                top_k = 1000) {
+  top_cpgs <- head(cpg_vector, top_k)
+  entrez_list <- cpg2entrez_map[top_cpgs]
+  entrez_ids <- unique(unlist(entrez_list))
+  entrez_ids <- entrez_ids[!is.na(entrez_ids)]
+
+  if (length(entrez_ids) == 0) return(data.frame())
 
   enrich_result <- enrichPathway(
     gene = entrez_ids,
@@ -177,7 +195,7 @@ simulate_benchmark_dataset <- function(pathway_info,
                                        noise_score_sd = 1,
                                        correlation_threshold = 0.15,
                                        p_value_threshold = 1e-4,
-                                       seed = 1029) {
+                                       seed = 123) {
   set.seed(seed)
 
   truth_pathway_ids <- list()
@@ -238,68 +256,6 @@ simulate_benchmark_dataset <- function(pathway_info,
     signal_entrez_genes = signal_entrez_genes,
     signal_gene_map = signal_gene_map
   ))
-}
-
-extract_pathways_by_level <- function(hierarchy_table, level, root) {
-  current <- root
-  all_levels <- list()
-  all_levels[[1]] <- current
-
-  for (i in 2:level) {
-    next_level <- unique(hierarchy_table$child[hierarchy_table$parent %in% all_levels[[i - 1]]])
-    if (length(next_level) == 0) break
-    all_levels[[i]] <- next_level
-  }
-
-  target_ids <- unique(unlist(all_levels[level]))
-
-  name_df <- as.data.frame(AnnotationDbi::toTable(reactome.db::reactomePATHID2NAME))
-  names(target_ids) <- name_df$PATHNAME[match(target_ids, name_df$PATHID)]
-
-  return(target_ids)
-}
-
-sample_random_pathways_by_level <- function(hierarchy_table,
-                                            n_root = 7,
-                                            target_level = 3,
-                                            min_depth = 5,
-                                            seed = 1029) {
-  set.seed(seed)
-
-  # ---- decide how many layers of a pathway ----
-  has_n_levels <- function(root_id, depth, hierarchy_table) {
-    current <- root_id
-    for (i in 2:depth) {
-      current <- unique(hierarchy_table$child[hierarchy_table$parent %in% current])
-      if (length(current) == 0) return(FALSE)
-    }
-    return(TRUE)
-  }
-
-  # ---- get all top level pathways and filter ----
-  all_root_ids <- unique(hierarchy_table$parent[!hierarchy_table$parent %in% hierarchy_table$child])
-  root_ids <- Filter(function(pid) has_n_levels(pid, min_depth, hierarchy_table), all_root_ids)
-
-  sampled_roots <- sample(root_ids, n_root)
-
-  name_df <- as.data.frame(AnnotationDbi::toTable(reactome.db::reactomePATHID2NAME))
-
-  pathway_info <- list()
-
-  for (root_id in sampled_roots) {
-    current_ids <- extract_pathways_by_level(hierarchy_table, level = target_level, root = root_id)
-    selected <- sample(current_ids, 1)
-    matched_idx <- match(selected, name_df$DB_ID)
-
-    if (!is.na(matched_idx)) {
-      pname <- name_df$path_name[matched_idx]
-      if (!is.na(pname) && pname != "") {
-        pathway_info[[pname]] <- selected
-      }
-    }
-  }
-
-  return(pathway_info)
 }
 
 benchmark_enrichment_results <- function(result_df,
@@ -400,7 +356,7 @@ benchmark_enrichment_results <- function(result_df,
   ))
 }
 
-select_diverse_top_pathways <- function(hierarchy_table, pathway2gene, n = 7, min_genes = 200, max_jaccard = 0.2, seed = 1029) {
+select_diverse_top_pathways <- function(hierarchy_table, pathway2gene, n = 7, min_genes = 200, max_jaccard = 0.2, seed = 123) {
   set.seed(seed)
 
   top_ids <- unique(hierarchy_table$parent[!hierarchy_table$parent %in% hierarchy_table$child])
