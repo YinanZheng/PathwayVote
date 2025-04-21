@@ -238,7 +238,8 @@ pathway_vote <- function(ewas_data, eQTM,
         NULL
       })
     },
-    .options = furrr::furrr_options(seed = TRUE)
+    .options = furrr::furrr_options(seed = TRUE),
+    .progress = verbose
   )
 
   # Will use cube-root(N) if fixed_prune is NULL
