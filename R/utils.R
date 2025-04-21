@@ -246,7 +246,13 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
   all_pathways <- list()
   for (db in databases) {
     if (verbose) message(sprintf("  Extracting pathways for %s...", db))
-    all_pathways[[db]] <- unique(unlist(lapply(enrich_results, function(x) x[[db]]$ID)))
+    all_pathways[[db]] <- unique(unlist(lapply(enrich_results, function(x) {
+      if (!is.null(x[[db]]) && is.data.frame(x[[db]]) && "ID" %in% colnames(x[[db]])) {
+        x[[db]]$ID
+      } else {
+        NULL
+      }
+    })))
   }
 
   p_value_matrices <- list()
@@ -263,10 +269,16 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
 
     for (j in seq_along(enrich_results)) {
       current_df <- enrich_results[[j]][[db]]
-      for (pathway in pathways) {
-        mat[pathway, j] <- ifelse(pathway %in% current_df$ID,
-                                  current_df$pvalue[current_df$ID == pathway],
-                                  1)
+      if (!is.null(current_df) && is.data.frame(current_df) && nrow(current_df) > 0) {
+        for (pathway in pathways) {
+          if (pathway %in% current_df$ID) {
+            mat[pathway, j] <- current_df$pvalue[current_df$ID == pathway]
+          } else {
+            mat[pathway, j] <- 1
+          }
+        }
+      } else {
+        mat[, j] <- 1
       }
     }
     p_value_matrices[[db]] <- mat
@@ -301,8 +313,9 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
     if (verbose) message(sprintf("  Collecting pathway info for %s...", db))
     pathway_info[[db]] <- list()
     for (i in seq_along(enrich_results)) {
-      if (nrow(enrich_results[[i]][[db]]) > 0) {
-        df <- enrich_results[[i]][[db]][, c("ID", "Description", "geneID")]
+      current_df <- enrich_results[[i]][[db]]
+      if (!is.null(current_df) && is.data.frame(current_df) && nrow(current_df) > 0) {
+        df <- current_df[, c("ID", "Description", "geneID")]
         for (j in 1:nrow(df)) {
           pathway_id <- df$ID[j]
           if (is.null(pathway_info[[db]][[pathway_id]])) {
