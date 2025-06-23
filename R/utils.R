@@ -12,6 +12,13 @@ safe_setup_plan <- function(workers) {
   })
 }
 
+shallow_copy_env <- function(env, keys = NULL) {
+  out <- new.env()
+  if (is.null(keys)) keys <- ls(env, all.names = TRUE)
+  for (k in keys) out[[k]] <- env[[k]]
+  out
+}
+
 check_ewas_cpg_match <- function(ewas_data, eqtm, threshold = 0.8) {
   ewas_ids <- ewas_data[[1]]
   eqtm_cpgs <- getData(eqtm)$cpg
@@ -99,11 +106,24 @@ select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, overlap_th
 }
 
 prepare_annotation_data <- function(databases) {
-  list(
-    reactome_data = if ("Reactome" %in% databases) ReactomePA:::get_Reactome_DATA("human") else NULL,
-    go_data = if ("GO" %in% databases) clusterProfiler:::get_GO_data(org.Hs.eg.db, "ALL", "ENTREZID") else NULL,
-    kegg_data = if ("KEGG" %in% databases) clusterProfiler:::prepare_KEGG("hsa") else NULL
-  )
+  out <- list()
+
+  if ("Reactome" %in% databases) {
+    reactome_env <- ReactomePA:::get_Reactome_DATA("human")
+    out$reactome_data <- shallow_copy_env(reactome_env)
+  }
+
+  if ("GO" %in% databases) {
+    go_env <- clusterProfiler:::get_GO_data(org.Hs.eg.db, "ALL", "ENTREZID")
+    out$go_data <- shallow_copy_env(go_env)
+  }
+
+  if ("KEGG" %in% databases) {
+    kegg_env <- clusterProfiler:::prepare_KEGG("hsa")
+    out$kegg_data <- shallow_copy_env(kegg_env)
+  }
+
+  return(out)
 }
 
 run_enrichment <- function(gene_list,

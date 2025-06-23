@@ -94,4 +94,18 @@ eqtm_data <- data.frame(
 )
 eqtm_obj <- create_eQTM(eqtm_data)
 
+# Run pathway voting with minimal settings
+\dontrun{
+results <- pathway_vote(
+  ewas_data = ewas,
+  eQTM = eqtm_obj,
+  databases = c("GO", "KEGG", "Reactome"),
+  worker = 2,
+  verbose = TRUE
+)
+head(results$GO)
+head(results$KEGG)
+head(results$Reactome)
+}
+
 }
