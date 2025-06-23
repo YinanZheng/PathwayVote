@@ -1,4 +1,4 @@
-#' @importFrom stats na.omit p.adjust
+#' @importFrom stats na.omit p.adjust quantile
 #' @importFrom utils head
 #' @importFrom future plan
 #' @importFrom furrr future_map furrr_options
