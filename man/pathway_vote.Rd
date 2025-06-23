@@ -100,7 +100,7 @@ results <- pathway_vote(
   ewas_data = ewas,
   eQTM = eqtm_obj,
   databases = c("GO", "KEGG", "Reactome"),
-  workers = 2,
+  readable = TRUE,
   verbose = TRUE
 )
 head(results$GO)

@@ -76,7 +76,7 @@
 #'   ewas_data = ewas,
 #'   eQTM = eqtm_obj,
 #'   databases = c("GO", "KEGG", "Reactome"),
-#'   workers = 2,
+#'   readable = TRUE,
 #'   verbose = TRUE
 #' )
 #' head(results$GO)
@@ -237,7 +237,7 @@ pathway_vote <- function(ewas_data, eQTM,
     gene_lists,
     function(glist) {
       tryCatch({
-        PathwayVote:::run_enrichment(
+        run_enrichment(
           gene_list = glist,
           databases = databases,
           universe = universe_genes,
