@@ -70,6 +70,18 @@
 #' )
 #' eqtm_obj <- create_eQTM(eqtm_data)
 #'
+#' # Run pathway voting with minimal settings
+#' \dontrun{
+#' results <- pathway_vote(
+#'   ewas_data = ewas,
+#'   eQTM = eqtm_obj,
+#'   databases = "Reactome",
+#'   workers = 1,
+#'   verbose = TRUE
+#' )
+#' head(results$Reactome)
+#' }
+#'
 #' @export
 #'
 pathway_vote <- function(ewas_data, eQTM,
