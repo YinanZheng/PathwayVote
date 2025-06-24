@@ -3,10 +3,10 @@
 #' @importFrom future plan
 #' @importFrom furrr future_map furrr_options
 #' @importFrom parallelly availableCores
-#' @importFrom ReactomePA enrichPathway
-#' @importFrom clusterProfiler enrichGO enrichKEGG setReadable
+#' @importFrom AnnotationDbi select keys
+#' @importFrom reactome.db reactome.db
+#' @importFrom clusterProfiler enricher download_KEGG setReadable
 #' @importFrom org.Hs.eg.db org.Hs.eg.db
-#' @import dplyr
 
 #' @title Pathway Voting-Based Enrichment Analysis
 #'
@@ -219,33 +219,23 @@ pathway_vote <- function(ewas_data, eQTM,
   if (verbose) message(sprintf("Gene filtering completed. %d valid combinations retained.", valid_combination_count))
 
   gene_lists <- lapply(all_gene_sets, function(x) x$gene_list)
-
   universe_genes <- unique(na.omit(getData(eQTM)$entrez))
 
-  annotation_data <- prepare_annotation_data(databases)
-  reactome_data <- annotation_data$reactome_data
-  go_data <- annotation_data$go_data
-  kegg_data <- annotation_data$kegg_data
-
-  if (verbose) {
-    loaded_anno <- names(Filter(Negate(is.null), annotation_data))
-    message("Annotation data prepared: ", paste(loaded_anno, collapse = ", "))
-  }
+  if (verbose) message("Preparing all annotation data...")
+  preloaded_data <- prepare_enrichment_data(databases, verbose = verbose)
 
   if (verbose) message("Running enrichment analysis...")
   enrich_results <- furrr::future_map(
     gene_lists,
     function(glist) {
       tryCatch({
+        # 2. Use the fast function with preloaded data
         run_enrichment(
           gene_list = glist,
           databases = databases,
           universe = universe_genes,
           readable = readable,
-          verbose = FALSE,
-          reactome_data = reactome_data,
-          go_data = go_data,
-          kegg_data = kegg_data
+          preloaded_data = preloaded_data
         )
       }, error = function(e) {
         warning("Enrichment failed for gene list ", paste(head(glist, 5), collapse = ","), ": ", conditionMessage(e))

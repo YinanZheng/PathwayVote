@@ -11,15 +11,15 @@ Encoding: UTF-8
 Depends:
     R (>= 4.0.0)
 Imports:
-    dplyr,
-    org.Hs.eg.db,
-    ReactomePA,
-    clusterProfiler,
     AnnotationDbi,
-    methods,
+    clusterProfiler,
     future,
     furrr,
-    parallelly
+    GO.db,
+    methods,
+    org.Hs.eg.db,
+    parallelly,
+    reactome.db
 Suggests:
     testthat
 RoxygenNote: 7.3.2

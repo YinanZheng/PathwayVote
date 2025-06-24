@@ -12,13 +12,6 @@ safe_setup_plan <- function(workers) {
   })
 }
 
-shallow_copy_env <- function(env, keys = NULL) {
-  out <- new.env()
-  if (is.null(keys)) keys <- ls(env, all.names = TRUE)
-  for (k in keys) out[[k]] <- env[[k]]
-  out
-}
-
 check_ewas_cpg_match <- function(ewas_data, eqtm, threshold = 0.8) {
   ewas_ids <- ewas_data[[1]]
   eqtm_cpgs <- getData(eqtm)$cpg
@@ -105,41 +98,73 @@ select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, overlap_th
   return(gene_lists[selected])
 }
 
-prepare_annotation_data <- function(databases) {
-  out <- list()
+# Prepares user data for enricher in a compliant and performant way
+prepare_enrichment_data <- function(databases, organism = "human", verbose = FALSE) {
 
-  if ("Reactome" %in% databases) {
-    reactome_env <- ReactomePA:::get_Reactome_DATA("human")
-    out$reactome_data <- shallow_copy_env(reactome_env)
-  }
+  user_data_list <- list()
 
   if ("GO" %in% databases) {
-    go_env <- clusterProfiler:::get_GO_data(org.Hs.eg.db, "ALL", "ENTREZID")
-    out$go_data <- shallow_copy_env(go_env)
+    if (verbose) message("Preparing GO annotation data...")
+    # Get GO to Entrez Gene mappings
+    go_data <- AnnotationDbi::select(org.Hs.eg.db,
+                                     keys = keys(org.Hs.eg.db, keytype = "ENTREZID"),
+                                     columns = c("GOALL", "ONTOLOGYALL"),
+                                     keytype = "ENTREZID")
+
+    term2gene <- go_data[, c("GOALL", "ENTREZID")]
+    term2name <- go_data[, c("GOALL", "ONTOLOGYALL")] # We just need a placeholder name, ID is fine
+
+    # Get GO term descriptions
+    go_terms <- AnnotationDbi::select(GO.db::GO.db, keys=unique(term2gene$GOALL), columns=c("TERM"), keytype="GOID")
+    term2name <- go_terms[, c("GOID", "TERM")]
+    colnames(term2name) <- c("TERM", "NAME")
+
+    user_data_list$GO <- list(TERM2GENE = term2gene, TERM2NAME = term2name)
   }
 
   if ("KEGG" %in% databases) {
-    kegg_env <- clusterProfiler:::prepare_KEGG("hsa")
-    out$kegg_data <- shallow_copy_env(kegg_env)
+    if (verbose) message("Preparing KEGG annotation data...")
+    # Use the exported function to download/load KEGG data
+    kegg_data <- clusterProfiler::download_KEGG(species = "hsa")
+    user_data_list$KEGG <- list(TERM2GENE = kegg_data$KEGGPATHID2EXTID, TERM2NAME = kegg_data$KEGGPATHID2NAME)
   }
 
-  return(out)
+  if ("Reactome" %in% databases) {
+    if (verbose) message("Preparing Reactome annotation data...")
+    # Use the reactome.db package for compliant data access
+    term2gene <- AnnotationDbi::select(reactome.db,
+                                       keys = keys(reactome.db, "ENTREZID"),
+                                       columns = "PATHID",
+                                       keytype = "ENTREZID")
+    colnames(term2gene) <- c("GENE", "TERM")
+    term2gene <- term2gene[, c("TERM", "GENE")] # Ensure correct column order
+
+    term2name <- AnnotationDbi::select(reactome.db,
+                                       keys = unique(term2gene$TERM),
+                                       columns = "PATHNAME",
+                                       keytype = "PATHID")
+    colnames(term2name) <- c("TERM", "NAME")
+
+    user_data_list$Reactome <- list(TERM2GENE = term2gene, TERM2NAME = term2name)
+  }
+
+  return(user_data_list)
 }
 
 run_enrichment <- function(gene_list,
                            databases = c("Reactome", "GO", "KEGG"),
                            universe = NULL,
                            readable = FALSE,
-                           verbose = FALSE,
-                           reactome_data = NULL,
-                           go_data = NULL,
-                           kegg_data = NULL) {
+                           preloaded_data = list()) {
   enrich_results <- list()
 
-  if ("Reactome" %in% databases) {
-    if (verbose) message("  Analyzing Reactome...")
+  if (length(gene_list) == 0) return(enrich_results)
 
-    res <- clusterProfiler:::enricher_internal(
+  for (db in databases) {
+    if (is.null(preloaded_data[[db]])) next
+
+    # Use the generic, performant enricher function with pre-loaded data
+    res <- clusterProfiler::enricher(
       gene = gene_list,
       universe = universe,
       pvalueCutoff = 1,
@@ -147,77 +172,21 @@ run_enrichment <- function(gene_list,
       qvalueCutoff = 1,
       minGSSize = 10,
       maxGSSize = 500,
-      USER_DATA = reactome_data
+      TERM2GENE = preloaded_data[[db]]$TERM2GENE,
+      TERM2NAME = preloaded_data[[db]]$TERM2NAME
     )
 
     if (!is.null(res)) {
-      res@keytype <- "ENTREZID"
-      res@organism <- "human"
-      res@ontology <- "Reactome"
       if (readable) {
-        res <- setReadable(res, OrgDb = org.Hs.eg.db)
+        # Ensure the OrgDb is available for ID mapping
+        res <- tryCatch(setReadable(res, OrgDb = org.Hs.eg.db, keyType = "ENTREZID"), error = function(e) res)
       }
-      enrich_results$Reactome <- as.data.frame(res)
+      enrich_results[[db]] <- as.data.frame(res)
     } else {
-      enrich_results$Reactome <- NULL
+      enrich_results[[db]] <- NULL
     }
   }
 
-  if ("GO" %in% databases) {
-    if (verbose) message("  Analyzing GO...")
-
-    res <- clusterProfiler:::enricher_internal(
-      gene = gene_list,
-      universe = universe,
-      pvalueCutoff = 1,
-      pAdjustMethod = "BH",
-      qvalueCutoff = 1,
-      minGSSize = 10,
-      maxGSSize = 500,
-      USER_DATA = go_data
-    )
-
-    if (!is.null(res)) {
-      res@keytype <- "ENTREZID"
-      res@organism <- "Homo sapiens"
-      res@ontology <- "GO"
-      if (readable) {
-        res <- setReadable(res, OrgDb = org.Hs.eg.db)
-      }
-      enrich_results$GO <- as.data.frame(res)
-    } else {
-      enrich_results$GO <- NULL
-    }
-  }
-
-  if ("KEGG" %in% databases) {
-    if (verbose) message("  Analyzing KEGG...")
-
-    res <- clusterProfiler:::enricher_internal(
-      gene = gene_list,
-      universe = universe,
-      pvalueCutoff = 1,
-      pAdjustMethod = "BH",
-      qvalueCutoff = 1,
-      minGSSize = 10,
-      maxGSSize = 500,
-      USER_DATA = kegg_data
-    )
-
-    if (!is.null(res)) {
-      res@keytype <- "ENTREZID"
-      res@organism <- "hsa"
-      res@ontology <- "KEGG"
-      if (readable) {
-        res <- setReadable(res, OrgDb = org.Hs.eg.db)
-      }
-      enrich_results$KEGG <- as.data.frame(res)
-    } else {
-      enrich_results$KEGG <- NULL
-    }
-  }
-
-  if (verbose) message("  Enrichment completed.")
   return(enrich_results)
 }
 

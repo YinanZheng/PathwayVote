@@ -1,6 +1,5 @@
 #' @importFrom methods setClass setGeneric setMethod new validObject
 #' @importFrom AnnotationDbi mapIds
-#' @import dplyr
 
 #' @title Expression quantitative trait methylation (eQTM) Class
 #'
