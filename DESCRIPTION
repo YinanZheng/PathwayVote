@@ -1,6 +1,6 @@
 Package: PathwayVote
 Title: Robust Pathway Enrichment for DNA Methylation Studies Using Ensemble Voting
-Version: 0.1.1
+Version: 0.1.2
 Authors@R: c(person("Yinan", "Zheng", 
                     email = "y-zheng@northwestern.edu", 
                     role = c("aut", "cre"), 
@@ -11,6 +11,7 @@ Encoding: UTF-8
 Depends:
     R (>= 4.0.0)
 Imports:
+    harmonicmeanp,
     AnnotationDbi,
     clusterProfiler,
     future,

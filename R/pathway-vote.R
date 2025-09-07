@@ -1,4 +1,5 @@
-#' @importFrom stats na.omit p.adjust quantile
+#' @importFrom stats lm na.omit p.adjust quantile
+#' @importFrom harmonicmeanp p.hmp
 #' @importFrom utils head
 #' @importFrom future plan
 #' @importFrom furrr future_map furrr_options
@@ -196,6 +197,7 @@ pathway_vote <- function(ewas_data, eQTM,
     # Step 2: Apply entropy + stability-based + probe bias correction pruning
     entropy_filtered_lists <- select_gene_lists_entropy_auto(
       gene_lists = raw_results$gene_lists,
+      eQTM = eQTM_subset,
       grid_size = grid_size,
       overlap_threshold = overlap_threshold,
       verbose = verbose
@@ -229,7 +231,6 @@ pathway_vote <- function(ewas_data, eQTM,
     gene_lists,
     function(glist) {
       tryCatch({
-        # 2. Use the fast function with preloaded data
         run_enrichment(
           gene_list = glist,
           databases = databases,

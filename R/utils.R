@@ -58,47 +58,86 @@ jaccard_dist <- function(a, b) {
   length(intersect(a, b)) / length(union(a, b))
 }
 
-select_gene_lists_entropy_auto <- function(gene_lists, grid_size = 5, overlap_threshold = 0.7, verbose = FALSE) {
-  all_genes <- unlist(gene_lists)
+select_gene_lists_entropy_auto <- function(gene_lists,
+                                           eQTM,
+                                           grid_size = 5,
+                                           overlap_threshold = 0.7,
+                                           verbose = FALSE) {
+  stopifnot(length(gene_lists) > 0)
+  if (missing(eQTM)) stop("select_gene_lists_entropy_auto: 'eQTM' is required for CpG-density residual penalty.")
+
+  # ------- Entropy score -------
+  all_genes <- unlist(gene_lists, use.names = FALSE)
   gene_freq <- table(all_genes)
 
   entropy_score <- sapply(gene_lists, function(gset) {
     sum(log(1 / gene_freq[gset]), na.rm = TRUE)
   })
 
+  # ------- Instability score -------
   instability <- sapply(seq_along(gene_lists), function(i) {
-    mean(sapply(setdiff(seq_along(gene_lists), i), function(j) 1 - jaccard_dist(gene_lists[[i]], gene_lists[[j]])))
+    mean(sapply(setdiff(seq_along(gene_lists), i),
+                function(j) 1 - jaccard_dist(gene_lists[[i]], gene_lists[[j]])))
   })
 
-  gene_probe_count <- table(unlist(gene_lists))
+  # ------- CpG overrepresentation score -------
+  # ν(g): number of gene lists containing gene g
+  nu <- table(all_genes)
+
+  # c(g): number of CpGs assocaited with gene g
+  dat <- getData(eQTM)
+  dat <- dat[!is.na(dat$entrez) & !is.na(dat$cpg), c("entrez", "cpg")]
+  dat$entrez <- as.character(dat$entrez)
+  cpg_count <- tapply(dat$cpg, dat$entrez, function(v) length(unique(v)))
+
+  # ν ~ log1p(c)
+  genes <- union(names(nu), names(cpg_count))
+  x <- log1p(as.numeric(cpg_count[genes])); names(x) <- genes
+  y <- as.numeric(nu[genes]);                names(y) <- genes
+  x[is.na(x)] <- 0; y[is.na(y)] <- 0
+
+  nu_hat <- tryCatch({
+    fit <- stats::lm(y ~ x)
+    as.numeric(predict(fit, data.frame(x = x)))
+  }, error = function(e) {
+    rep(mean(y), length(y))
+  })
+  if (!all(is.finite(nu_hat))) nu_hat <- rep(mean(y), length(y))
+
+  nu_res <- pmax(0, y - pmax(0, nu_hat)); names(nu_res) <- genes
+
   penalty_score <- sapply(gene_lists, function(gset) {
-    sum(log1p(gene_probe_count[gset]), na.rm = TRUE)
+    sum(log1p(nu_res[gset]), na.rm = TRUE)
   })
 
-  total_score <- scale(entropy_score) - scale(instability) - scale(penalty_score)
+  # ------- Total score -------
+  total_score <- as.numeric(scale(entropy_score) - scale(instability) - scale(penalty_score))
 
   remaining <- seq_along(gene_lists)
-  selected <- c()
+  selected <- integer(0)
 
   while (length(remaining) > 0) {
-    best_idx <- remaining[which.max(total_score[remaining])]
+    best_idx <- remaining[ which.max(total_score[remaining]) ]
     selected <- c(selected, best_idx)
 
     overlap <- sapply(remaining, function(i) {
       jaccard_dist(gene_lists[[best_idx]], gene_lists[[i]])
     })
 
-    remaining <- setdiff(remaining, remaining[overlap >= overlap_threshold])
+    removed <- remaining[overlap >= overlap_threshold]
+    remaining <- setdiff(remaining, removed)
 
     if (verbose) {
-      message(sprintf("Selected gene list %d, removed %d overlapping lists.", best_idx, sum(overlap >= overlap_threshold)))
+      message(sprintf("Selected gene list %d, removed %d overlapping lists.",
+                      best_idx, sum(overlap >= overlap_threshold) - 1L))
     }
   }
 
-  return(gene_lists[selected])
+  out <- gene_lists[selected]
+
+  return(out)
 }
 
-# Prepares user data for enricher in a compliant and performant way
 prepare_enrichment_data <- function(databases, organism = "human", verbose = FALSE) {
 
   user_data_list <- list()
@@ -190,6 +229,7 @@ run_enrichment <- function(gene_list,
   return(enrich_results)
 }
 
+
 generate_gene_lists_grid <- function(eQTM, stat_grid, distance_grid, verbose = FALSE) {
   if (!inherits(eQTM, "eQTM")) stop("Input must be an eQTM object.")
   data <- getData(eQTM)
@@ -222,25 +262,16 @@ generate_gene_lists_grid <- function(eQTM, stat_grid, distance_grid, verbose = F
   return(list(gene_lists = gene_lists, params = params))
 }
 
-harmonic_mean_p <- function(p_values) {
-  valid_p <- p_values[!is.na(p_values) & p_values >= 0 & p_values <= 1]
-  if (length(valid_p) == 0) return(1)
-  if (length(valid_p) == 1) return(valid_p[1])
-  return(length(valid_p) / sum(1 / valid_p))
-}
-
 combine_enrichment_results <- function(enrich_results, databases, verbose = FALSE) {
-  if (verbose) message("Combining enrichment results...")
+  if (verbose) message("Combining enrichment results ...")
+
+  n_runs <- length(enrich_results)
 
   all_pathways <- list()
   for (db in databases) {
     if (verbose) message(sprintf("  Extracting pathways for %s...", db))
     all_pathways[[db]] <- unique(unlist(lapply(enrich_results, function(x) {
-      if (!is.null(x[[db]]) && is.data.frame(x[[db]]) && "ID" %in% colnames(x[[db]])) {
-        x[[db]]$ID
-      } else {
-        NULL
-      }
+      if (!is.null(x[[db]]) && is.data.frame(x[[db]]) && "ID" %in% colnames(x[[db]])) x[[db]]$ID else NULL
     })))
   }
 
@@ -253,21 +284,18 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
       next
     }
 
-    mat <- matrix(NA, nrow = length(pathways), ncol = length(enrich_results))
-    rownames(mat) <- pathways
+    mat <- matrix(NA_real_, nrow = length(pathways), ncol = n_runs,
+                  dimnames = list(pathways, paste0("run", seq_len(n_runs))))
 
-    for (j in seq_along(enrich_results)) {
+    for (j in seq_len(n_runs)) {
       current_df <- enrich_results[[j]][[db]]
-      if (!is.null(current_df) && is.data.frame(current_df) && nrow(current_df) > 0) {
-        for (pathway in pathways) {
-          if (pathway %in% current_df$ID) {
-            mat[pathway, j] <- current_df$pvalue[current_df$ID == pathway]
-          } else {
-            mat[pathway, j] <- 1
-          }
-        }
-      } else {
-        mat[, j] <- 1
+      if (is.null(current_df) || !is.data.frame(current_df) || nrow(current_df) == 0) next
+      if (!("ID" %in% names(current_df)) || !("pvalue" %in% names(current_df))) next
+      common_ids <- intersect(pathways, current_df$ID)
+      if (length(common_ids)) {
+        idx_row <- match(common_ids, pathways)
+        idx_df  <- match(common_ids, current_df$ID)
+        mat[idx_row, j] <- current_df$pvalue[idx_df]
       }
     }
     p_value_matrices[[db]] <- mat
@@ -282,19 +310,24 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
       next
     }
 
-    if (verbose) message(sprintf("  Combining p-values for %s using HMP...", db))
-    combined_vec <- c()
-    for (pathway in rownames(mat)) {
-      combined_vec[pathway] <- harmonic_mean_p(mat[pathway, ])
+    if (verbose) message(sprintf("  Combining p-values for %s using HMP ...", db))
+    combined_vec <- setNames(numeric(nrow(mat)), rownames(mat))
+
+    for (i in seq_len(nrow(mat))) {
+      pvec <- mat[i, ]
+      pvec <- pvec[is.finite(pvec) & !is.na(pvec) & pvec >= 0 & pvec <= 1]
+      if (!length(pvec)) {
+        combined_vec[i] <- 1
+      } else if (length(pvec) == 1) {
+        combined_vec[i] <- harmonicmeanp::p.hmp(pvec, w = 1 / n_runs, L = n_runs, multilevel = TRUE)
+      } else {
+        w <- rep(1 / n_runs, length(pvec))
+        combined_vec[i] <- harmonicmeanp::p.hmp(pvec, w = w, L = n_runs, multilevel = TRUE)
+      }
     }
 
-    if (length(combined_vec) == 0 || all(is.na(combined_vec))) {
-      warning("No valid combined p-values for database: ", db)
-      combined_p[[db]] <- numeric(0)
-    } else {
-      combined_vec <- combined_vec[order(combined_vec)]
-      combined_p[[db]] <- p.adjust(combined_vec, method = "BH")
-    }
+    combined_vec <- combined_vec[order(combined_vec)]
+    combined_p[[db]] <- p.adjust(combined_vec, method = "BH")
   }
 
   pathway_info <- list()
@@ -305,13 +338,14 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
       current_df <- enrich_results[[i]][[db]]
       if (!is.null(current_df) && is.data.frame(current_df) && nrow(current_df) > 0) {
         df <- current_df[, c("ID", "Description", "geneID")]
-        for (j in 1:nrow(df)) {
+        for (j in seq_len(nrow(df))) {
           pathway_id <- df$ID[j]
           if (is.null(pathway_info[[db]][[pathway_id]])) {
             pathway_info[[db]][[pathway_id]] <- list(Description = df$Description[j], geneIDs = character())
           }
-          genes <- unlist(strsplit(df$geneID[j], "/"))
-          pathway_info[[db]][[pathway_id]]$geneIDs <- union(pathway_info[[db]][[pathway_id]]$geneIDs, genes)
+          genes <- unlist(strsplit(df$geneID[j], "/", fixed = TRUE))
+          pathway_info[[db]][[pathway_id]]$geneIDs <-
+            union(pathway_info[[db]][[pathway_id]]$geneIDs, genes)
         }
       }
     }
@@ -327,14 +361,14 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
 
     pathway_df <- data.frame(
       ID = names(pathway_info[[db]]),
-      Description = sapply(pathway_info[[db]], function(x) x$Description),
-      geneID = sapply(pathway_info[[db]], function(x) paste(x$geneIDs, collapse = "/")),
+      Description = vapply(pathway_info[[db]], function(x) x$Description, character(1)),
+      geneID = vapply(pathway_info[[db]], function(x) paste(x$geneIDs, collapse = "/"), character(1)),
       stringsAsFactors = FALSE
     )
 
     result_tables[[db]] <- data.frame(
       ID = names(combined_p[[db]]),
-      p.adjust = combined_p[[db]],
+      p.adjust = as.numeric(combined_p[[db]]),
       row.names = NULL
     )
 
