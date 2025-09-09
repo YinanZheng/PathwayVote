@@ -54,64 +54,105 @@ generate_k_grid_fdr_guided <- function(ewas_data,
   return(k_grid)
 }
 
-jaccard_dist <- function(a, b) {
+generate_gene_lists_grid <- function(eQTM, stat_grid, distance_grid) {
+  if (!inherits(eQTM, "eQTM")) stop("Input must be an eQTM object.")
+  data <- getData(eQTM)
+
+  gene_lists <- list()
+  params <- list()
+
+  for (r in stat_grid) {
+    for (d in distance_grid) {
+      subset <- data[abs(data$statistics) > r & data$distance < d, ]
+      if (nrow(subset) == 0) next
+
+      map <- split(subset$entrez, subset$cpg)
+      map <- lapply(map, function(ids) unique(na.omit(as.character(ids))))
+      map <- map[lengths(map) > 0]
+
+      gene_list <- unique(unlist(map))
+      if (length(gene_list) == 0) next
+
+      gene_lists[[length(gene_lists) + 1]] <- gene_list
+      params[[length(params) + 1]] <- c(stat = r, d = d)
+    }
+  }
+
+  return(list(gene_lists = gene_lists, params = params))
+}
+
+jaccard <- function(a, b) {
   length(intersect(a, b)) / length(union(a, b))
 }
 
-select_gene_lists_entropy_auto <- function(gene_lists,
-                                           eQTM,
-                                           grid_size = 5,
-                                           overlap_threshold = 0.7,
-                                           verbose = FALSE) {
-  stopifnot(length(gene_lists) > 0)
-  if (missing(eQTM)) stop("select_gene_lists_entropy_auto: 'eQTM' is required for CpG-density residual penalty.")
+get_cpg_count_per_gene <- function(eQTM) {
+  stopifnot(inherits(eQTM, "eQTM"))
 
-  # ------- Entropy score -------
-  all_genes <- unlist(gene_lists, use.names = FALSE)
-  gene_freq <- table(all_genes)
-
-  entropy_score <- sapply(gene_lists, function(gset) {
-    sum(log(1 / gene_freq[gset]), na.rm = TRUE)
-  })
-
-  # ------- Instability score -------
-  instability <- sapply(seq_along(gene_lists), function(i) {
-    mean(sapply(setdiff(seq_along(gene_lists), i),
-                function(j) 1 - jaccard_dist(gene_lists[[i]], gene_lists[[j]])))
-  })
-
-  # ------- CpG overrepresentation score -------
-  # ν(g): number of gene lists containing gene g
-  nu <- table(all_genes)
-
-  # c(g): number of CpGs assocaited with gene g
   dat <- getData(eQTM)
+
   dat <- dat[!is.na(dat$entrez) & !is.na(dat$cpg), c("entrez", "cpg")]
   dat$entrez <- as.character(dat$entrez)
+
   cpg_count <- tapply(dat$cpg, dat$entrez, function(v) length(unique(v)))
 
-  # ν ~ log1p(c)
-  genes <- union(names(nu), names(cpg_count))
+  return(cpg_count)
+}
+
+select_gene_lists_entropy_auto <- function(gene_lists,
+                                           cpg_count,
+                                           overlap_threshold = 0.7) {
+  stopifnot(length(gene_lists) > 0)
+
+  # ------- Information score -------
+  all_genes <- unlist(gene_lists, use.names = FALSE)
+  # n(g): number of gene lists containing gene g
+  ng <- table(all_genes)
+  genes <- names(ng)
+  N_k <- length(gene_lists)
+
+  p_hat <- (as.numeric(ng) + 1) / (N_k + 2) # Laplace/add-one smoothing
+  names(p_hat) <- genes
+
+  IG <- sapply(gene_lists, function(gset) {
+    gset <- unique(gset)
+    mean(-log(p_hat[gset]), na.rm = TRUE)
+  })
+
+  # ------- Discordance penalty -------
+  DG <- sapply(seq_along(gene_lists), function(i) {
+    mean(sapply(setdiff(seq_along(gene_lists), i),
+                function(j) 1 - jaccard(gene_lists[[i]], gene_lists[[j]])))
+  })
+
+  # ------- Gene overrepresentation penalty (quasi-Poisson GLM) -------
   x <- log1p(as.numeric(cpg_count[genes])); names(x) <- genes
-  y <- as.numeric(nu[genes]);                names(y) <- genes
-  x[is.na(x)] <- 0; y[is.na(y)] <- 0
+  y <- as.numeric(ng[genes]); names(y) <- genes
 
-  nu_hat <- tryCatch({
-    fit <- stats::lm(y ~ x)
-    as.numeric(predict(fit, data.frame(x = x)))
-  }, error = function(e) {
-    rep(mean(y), length(y))
+  x[!is.finite(x)] <- 0
+  y[!is.finite(y) | y < 0] <- 0
+
+  df_xy <- data.frame(x = as.numeric(x), y = as.numeric(y))
+
+  if (length(unique(df_xy$x[is.finite(df_xy$x)])) >= 2 && sum(df_xy$y) > 0) {
+    fit  <- glm(y ~ x, family = quasipoisson(link = "log"), data = df_xy)
+    yhat <- as.numeric(predict(fit, newdata = df_xy, type = "response"))  # E[y|x] >= 0
+  } else {
+    yhat <- rep(mean(df_xy$y, na.rm = TRUE), nrow(df_xy))
+  }
+
+  yhat[!is.finite(yhat)] <- mean(df_xy$y, na.rm = TRUE)
+  yhat <- pmax(0, yhat)
+
+  # only penalize the excess part
+  ng_res <- pmax(0, y - yhat); names(ng_res) <- genes
+
+  PG <- sapply(gene_lists, function(gset) {
+    sum(log1p(ng_res[gset]), na.rm = TRUE)
   })
-  if (!all(is.finite(nu_hat))) nu_hat <- rep(mean(y), length(y))
 
-  nu_res <- pmax(0, y - pmax(0, nu_hat)); names(nu_res) <- genes
-
-  penalty_score <- sapply(gene_lists, function(gset) {
-    sum(log1p(nu_res[gset]), na.rm = TRUE)
-  })
 
   # ------- Total score -------
-  total_score <- as.numeric(scale(entropy_score) - scale(instability) - scale(penalty_score))
+  total_score <- as.numeric(scale(IG) - scale(DG) - scale(PG))
 
   remaining <- seq_along(gene_lists)
   selected <- integer(0)
@@ -121,16 +162,11 @@ select_gene_lists_entropy_auto <- function(gene_lists,
     selected <- c(selected, best_idx)
 
     overlap <- sapply(remaining, function(i) {
-      jaccard_dist(gene_lists[[best_idx]], gene_lists[[i]])
+      jaccard(gene_lists[[best_idx]], gene_lists[[i]])
     })
 
     removed <- remaining[overlap >= overlap_threshold]
     remaining <- setdiff(remaining, removed)
-
-    if (verbose) {
-      message(sprintf("Selected gene list %d, removed %d overlapping lists.",
-                      best_idx, sum(overlap >= overlap_threshold) - 1L))
-    }
   }
 
   out <- gene_lists[selected]
@@ -227,39 +263,6 @@ run_enrichment <- function(gene_list,
   }
 
   return(enrich_results)
-}
-
-
-generate_gene_lists_grid <- function(eQTM, stat_grid, distance_grid, verbose = FALSE) {
-  if (!inherits(eQTM, "eQTM")) stop("Input must be an eQTM object.")
-  data <- getData(eQTM)
-
-  gene_lists <- list()
-  params <- list()
-
-  for (r in stat_grid) {
-    for (d in distance_grid) {
-      subset <- data[abs(data$statistics) > r & data$distance < d, ]
-      if (nrow(subset) == 0) next
-
-      map <- split(subset$entrez, subset$cpg)
-      map <- lapply(map, function(ids) unique(na.omit(as.character(ids))))
-      map <- map[lengths(map) > 0]
-
-      gene_list <- unique(unlist(map))
-      if (length(gene_list) == 0) next
-
-      gene_lists[[length(gene_lists) + 1]] <- gene_list
-      params[[length(params) + 1]] <- c(stat = r, d = d)
-
-      if (verbose) {
-        message(sprintf("Generated: %d genes, %d CpGs (|stat| > %.2f, dist < %d)",
-                        length(gene_list), length(map), r, d))
-      }
-    }
-  }
-
-  return(list(gene_lists = gene_lists, params = params))
 }
 
 combine_enrichment_results <- function(enrich_results, databases, verbose = FALSE) {

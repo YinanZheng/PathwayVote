@@ -181,9 +181,15 @@ pathway_vote <- function(ewas_data, eQTM,
   ranking_values <- if (use_abs) abs(rank_values) else rank_values
   ewas_data <- ewas_data[order(ranking_values, decreasing = rank_decreasing), ]
 
+  cpg_count <- get_cpg_count_per_gene(eQTM)
+
   if (verbose) message("Generating gene lists for all k values...")
+
+  total_initial <- 0L
+  total_retained <- 0L
+  valid_combination_count <- 0L
+
   all_gene_sets <- list()
-  valid_combination_count <- 0
 
   for (k in k_grid) {
     if (verbose) message(sprintf("Processing top %d CpGs...", k))
@@ -192,20 +198,30 @@ pathway_vote <- function(ewas_data, eQTM,
                        metadata = getMetadata(eQTM))
 
     # Step 1: Generate all candidate gene lists
-    raw_results <- generate_gene_lists_grid(eQTM_subset, stat_grid, distance_grid, verbose = verbose)
+    raw_results <- generate_gene_lists_grid(eQTM_subset, stat_grid, distance_grid)
+    initial_k <- length(raw_results$gene_lists)
+    total_initial <- total_initial + initial_k
 
-    # Step 2: Apply entropy + stability-based + probe bias correction pruning
+    # Step 2: Entropy-based filtering of gene lists
     entropy_filtered_lists <- select_gene_lists_entropy_auto(
       gene_lists = raw_results$gene_lists,
-      eQTM = eQTM_subset,
-      grid_size = grid_size,
-      overlap_threshold = overlap_threshold,
-      verbose = verbose
+      cpg_count = cpg_count,
+      overlap_threshold = overlap_threshold
     )
 
     # Step 3: Match back to their corresponding stat/distance params
     kept_indices <- which(vapply(raw_results$gene_lists, function(x)
       any(sapply(entropy_filtered_lists, function(y) setequal(x, y))), logical(1)))
+
+    retained_k <- length(kept_indices)
+    total_retained <- total_retained + retained_k
+    valid_combination_count <- valid_combination_count + retained_k
+
+    if (verbose) {
+      pct_k <- if (initial_k > 0) 100 * retained_k / initial_k else 0
+      message(sprintf("k = %d: retained %d of %d candidates (%.1f%%).",
+                      k, retained_k, initial_k, pct_k))
+    }
 
     for (i in kept_indices) {
       gene_list_i <- raw_results$gene_lists[[i]]
@@ -218,7 +234,13 @@ pathway_vote <- function(ewas_data, eQTM,
     }
   }
 
-  if (verbose) message(sprintf("Gene filtering completed. %d valid combinations retained.", valid_combination_count))
+  if (verbose) {
+    pct_all <- if (total_initial > 0) 100 * total_retained / total_initial else 0
+    message(sprintf(
+      "Gene list candidates filtering completed. %d valid candidates out of %d initial candidates retained (%.1f%%).",
+      total_retained, total_initial, pct_all
+    ))
+  }
 
   gene_lists <- lapply(all_gene_sets, function(x) x$gene_list)
   universe_genes <- unique(na.omit(getData(eQTM)$entrez))
