@@ -12,11 +12,20 @@ safe_setup_plan <- function(workers) {
   })
 }
 
-check_cpg_match <- function(cpg_input, eqtm, threshold = 0.8) {
+check_cpg_match <- function(cpg_input, eqtm, verbose = TRUE) {
   cpg_ids <- cpg_input[[1]]
   eqtm_cpgs <- getData(eqtm)$cpg
-  match_rate <- mean(cpg_ids %in% eqtm_cpgs, na.rm = TRUE)
-  match_rate >= threshold
+
+  matched <- sum(cpg_ids %in% eqtm_cpgs, na.rm = TRUE)
+  total <- length(cpg_ids)
+  match_rate <- matched / total
+
+  if (verbose) {
+    message(sprintf("Matched %d out of %d CpGs (%.2f%%) to eQTM database.",
+                    matched, total, match_rate * 100))
+  }
+
+  return(matched > 0)
 }
 
 generate_k_grid_fdr_guided <- function(cpg_input,
@@ -181,16 +190,19 @@ prepare_enrichment_data <- function(databases, organism = "human", verbose = FAL
   if ("GO" %in% databases) {
     if (verbose) message("Preparing GO annotation data...")
     # Get GO to Entrez Gene mappings
-    go_data <- AnnotationDbi::select(org.Hs.eg.db,
-                                     keys = keys(org.Hs.eg.db, keytype = "ENTREZID"),
-                                     columns = c("GOALL", "ONTOLOGYALL"),
-                                     keytype = "ENTREZID")
+    go_data <- suppressMessages(AnnotationDbi::select(org.Hs.eg.db,
+                                                      keys = keys(org.Hs.eg.db, keytype = "ENTREZID"),
+                                                      columns = c("GOALL", "ONTOLOGYALL"),
+                                                      keytype = "ENTREZID"))
 
     term2gene <- go_data[, c("GOALL", "ENTREZID")]
     term2name <- go_data[, c("GOALL", "ONTOLOGYALL")] # We just need a placeholder name, ID is fine
 
     # Get GO term descriptions
-    go_terms <- AnnotationDbi::select(GO.db::GO.db, keys=unique(term2gene$GOALL), columns=c("TERM"), keytype="GOID")
+    go_terms <- suppressMessages(AnnotationDbi::select(GO.db::GO.db,
+                                                       keys=unique(term2gene$GOALL),
+                                                       columns=c("TERM"),
+                                                       keytype="GOID"))
     term2name <- go_terms[, c("GOID", "TERM")]
     colnames(term2name) <- c("TERM", "NAME")
 
@@ -207,17 +219,17 @@ prepare_enrichment_data <- function(databases, organism = "human", verbose = FAL
   if ("Reactome" %in% databases) {
     if (verbose) message("Preparing Reactome annotation data...")
     # Use the reactome.db package for compliant data access
-    term2gene <- AnnotationDbi::select(reactome.db,
-                                       keys = keys(reactome.db, "ENTREZID"),
-                                       columns = "PATHID",
-                                       keytype = "ENTREZID")
+    term2gene <- suppressMessages(AnnotationDbi::select(reactome.db,
+                                                        keys = keys(reactome.db, "ENTREZID"),
+                                                        columns = "PATHID",
+                                                        keytype = "ENTREZID"))
     colnames(term2gene) <- c("GENE", "TERM")
     term2gene <- term2gene[, c("TERM", "GENE")] # Ensure correct column order
 
-    term2name <- AnnotationDbi::select(reactome.db,
-                                       keys = unique(term2gene$TERM),
-                                       columns = "PATHNAME",
-                                       keytype = "PATHID")
+    term2name <- suppressMessages(AnnotationDbi::select(reactome.db,
+                                                        keys = unique(term2gene$TERM),
+                                                        columns = "PATHNAME",
+                                                        keytype = "PATHID"))
     colnames(term2name) <- c("TERM", "NAME")
 
     user_data_list$Reactome <- list(TERM2GENE = term2gene, TERM2NAME = term2name)

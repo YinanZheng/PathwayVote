@@ -153,7 +153,7 @@ pathway_vote <- function(cpg_input, eQTM,
   if (verbose) message("Using ", workers, ifelse(workers == 1, " worker", " workers"))
 
   if (!inherits(eQTM, "eQTM")) stop("eQTM must be an eQTM object")
-  if (!check_cpg_match(cpg_input, eQTM)) {
+  if (!check_cpg_match(cpg_input, eQTM, verbose)) {
     stop("First column of `cpg_input` does not match CpG IDs in eQTM object. Please verify your input.")
   }
   if (all(is.na(getData(eQTM)$entrez))) stop("Entrez IDs are required for pathway analysis")
@@ -224,7 +224,7 @@ pathway_vote <- function(cpg_input, eQTM,
   # ------------------------------
   # Generate candidate gene lists
   # ------------------------------
-  if (verbose) message("Generating gene lists...")
+  if (verbose) message("==== Generating gene lists ====")
 
   total_initial <- 0L
   total_retained <- 0L
@@ -329,10 +329,10 @@ pathway_vote <- function(cpg_input, eQTM,
   gene_lists <- lapply(all_gene_sets, function(x) x$gene_list)
   universe_genes <- unique(stats::na.omit(getData(eQTM)$entrez))
 
-  if (verbose) message("Preparing all annotation data...")
+  if (verbose) message("==== Preparing all annotation data ====")
   preloaded_data <- prepare_enrichment_data(databases, verbose = verbose)
 
-  if (verbose) message("Running enrichment analysis...")
+  if (verbose) message("==== Running enrichment analysis ====")
   enrich_results <- furrr::future_map(
     gene_lists,
     function(glist) {
