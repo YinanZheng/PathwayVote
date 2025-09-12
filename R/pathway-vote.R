@@ -1,4 +1,4 @@
-#' @importFrom stats lm na.omit p.adjust quantile
+#' @importFrom stats glm predict quasipoisson setNames na.omit p.adjust quantile
 #' @importFrom harmonicmeanp p.hmp
 #' @importFrom utils head
 #' @importFrom future plan

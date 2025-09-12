@@ -30,7 +30,7 @@ generation), or (ii) an alternative metric such as t-statistics or feature impor
 case \code{k_grid} must be specified manually. If no ranking information is provided, all input CpGs
 are used directly and \code{k_grid} is ignored.}
 
-\item{eQTM}{An \code{eQTM} object containing CpG–gene linkage information, created by the \code{create_eQTM()} function. This object provides
+\item{eQTM}{An \code{eQTM} object containing CpG-gene linkage information, created by the \code{create_eQTM()} function. This object provides
 the CpG-to-gene mapping used for pathway inference. Please make sure the CpG IDs used here match those in \code{cpg_input}.}
 
 \item{databases}{A character vector of pathway databases. Supporting: "Reactome", "KEGG", and "GO".}
@@ -66,11 +66,11 @@ columns: `ID`, `p.adjust`, `Description`, and `geneID`.
 }
 \description{
 Performs pathway enrichment analysis using a voting-based framework that integrates
-CpG–gene regulatory information from expression quantitative trait methylation (eQTM) data.
+CpG-gene regulatory information from expression quantitative trait methylation (eQTM) data.
 For a grid of top-ranked CpGs and filtering thresholds, gene sets are generated and refined using
 an entropy-based pruning strategy that balances information richness, stability, and probe bias correction.
 In particular, gene lists dominated by genes with disproportionately high numbers of CpG mappings
-are penalized to mitigate active probe bias—a common artifact in methylation data analysis.
+are penalized to mitigate active probe bias, a common artifact in methylation data analysis.
 Enrichment results across parameter combinations are then aggregated using a voting scheme,
 prioritizing pathways that are consistently recovered under diverse settings and robust to parameter perturbations.
 }

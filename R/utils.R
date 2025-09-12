@@ -35,7 +35,7 @@ generate_k_grid_fdr_guided <- function(cpg_input,
                                        expand_factor = exp(1),
                                        verbose = FALSE) {
   pvals <- cpg_input[[rank_column]]
-  fdr_vals <- p.adjust(pvals, method = "BH")
+  fdr_vals <- stats::p.adjust(pvals, method = "BH")
 
   sig_indices <- which(fdr_vals <= fdr_cutoff)
   n_sig <- length(sig_indices)
@@ -143,8 +143,8 @@ select_gene_lists_entropy_auto <- function(gene_lists,
   df_xy <- data.frame(x = as.numeric(x), y = as.numeric(y))
 
   if (length(unique(df_xy$x[is.finite(df_xy$x)])) >= 2 && sum(df_xy$y) > 0) {
-    fit  <- glm(y ~ x, family = quasipoisson(link = "log"), data = df_xy)
-    yhat <- as.numeric(predict(fit, newdata = df_xy, type = "response"))  # E[y|x] >= 0
+    fit  <- stats::glm(y ~ x, family = stats::quasipoisson(link = "log"), data = df_xy)
+    yhat <- as.numeric(stats::predict(fit, newdata = df_xy, type = "response"))  # E[y|x] >= 0
   } else {
     yhat <- rep(mean(df_xy$y, na.rm = TRUE), nrow(df_xy))
   }
@@ -200,9 +200,9 @@ prepare_enrichment_data <- function(databases, organism = "human", verbose = FAL
 
     # Get GO term descriptions
     go_terms <- suppressMessages(AnnotationDbi::select(GO.db::GO.db,
-                                                       keys=unique(term2gene$GOALL),
-                                                       columns=c("TERM"),
-                                                       keytype="GOID"))
+                                                       keys = unique(term2gene$GOALL),
+                                                       columns = c("TERM"),
+                                                       keytype = "GOID"))
     term2name <- go_terms[, c("GOID", "TERM")]
     colnames(term2name) <- c("TERM", "NAME")
 
@@ -266,7 +266,7 @@ run_enrichment <- function(gene_list,
     if (!is.null(res)) {
       if (readable) {
         # Ensure the OrgDb is available for ID mapping
-        res <- tryCatch(setReadable(res, OrgDb = org.Hs.eg.db, keyType = "ENTREZID"), error = function(e) res)
+        res <- tryCatch(clusterProfiler::setReadable(res, OrgDb = org.Hs.eg.db, keyType = "ENTREZID"), error = function(e) res)
       }
       enrich_results[[db]] <- as.data.frame(res)
     } else {
@@ -326,7 +326,7 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
     }
 
     if (verbose) message(sprintf("  Combining p-values for %s using HMP ...", db))
-    combined_vec <- setNames(numeric(nrow(mat)), rownames(mat))
+    combined_vec <- stats::setNames(numeric(nrow(mat)), rownames(mat))
 
     for (i in seq_len(nrow(mat))) {
       pvec <- mat[i, ]
@@ -342,7 +342,7 @@ combine_enrichment_results <- function(enrich_results, databases, verbose = FALS
     }
 
     combined_vec <- combined_vec[order(combined_vec)]
-    combined_p[[db]] <- p.adjust(combined_vec, method = "BH")
+    combined_p[[db]] <- stats::p.adjust(combined_vec, method = "BH")
   }
 
   pathway_info <- list()
