@@ -12,20 +12,20 @@ safe_setup_plan <- function(workers) {
   })
 }
 
-check_ewas_cpg_match <- function(ewas_data, eqtm, threshold = 0.8) {
-  ewas_ids <- ewas_data[[1]]
+check_cpg_match <- function(cpg_input, eqtm, threshold = 0.8) {
+  cpg_ids <- cpg_input[[1]]
   eqtm_cpgs <- getData(eqtm)$cpg
-  match_rate <- mean(ewas_ids %in% eqtm_cpgs, na.rm = TRUE)
+  match_rate <- mean(cpg_ids %in% eqtm_cpgs, na.rm = TRUE)
   match_rate >= threshold
 }
 
-generate_k_grid_fdr_guided <- function(ewas_data,
+generate_k_grid_fdr_guided <- function(cpg_input,
                                        rank_column,
                                        grid_size = 5,
                                        fdr_cutoff = 0.05,
                                        expand_factor = exp(1),
                                        verbose = FALSE) {
-  pvals <- ewas_data[[rank_column]]
+  pvals <- cpg_input[[rank_column]]
   fdr_vals <- p.adjust(pvals, method = "BH")
 
   sig_indices <- which(fdr_vals <= fdr_cutoff)
