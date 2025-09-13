@@ -129,15 +129,15 @@ pathway_vote <- function(cpg_input, eQTM,
     message("Databases: ", paste(databases, collapse = ", "))
   }
 
-  required_pkgs <- c("PathwayVote", "purrr", "furrr", "future", "ReactomePA", "clusterProfiler", "org.Hs.eg.db")
-  lapply(required_pkgs, function(pkg) {
-    if (!requireNamespace(pkg, quietly = TRUE)) {
-      stop("Package '", pkg, "' is required. Please install it first.")
-    }
-  })
-  suppressMessages({
-    lapply(required_pkgs, library, character.only = TRUE)
-  })
+  # required_pkgs <- c("PathwayVote", "purrr", "furrr", "future", "ReactomePA", "clusterProfiler", "org.Hs.eg.db")
+  # lapply(required_pkgs, function(pkg) {
+  #   if (!requireNamespace(pkg, quietly = TRUE)) {
+  #     stop("Package '", pkg, "' is required. Please install it first.")
+  #   }
+  # })
+  # suppressMessages({
+  #   lapply(required_pkgs, library, character.only = TRUE)
+  # })
 
   available_cores <- parallelly::availableCores(logical = TRUE)
   user_specified_workers <- !is.null(workers)
