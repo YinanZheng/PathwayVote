@@ -55,6 +55,8 @@ generate_k_grid_fdr_guided <- function(cpg_input,
   # Use log scale to spread grid between min_k and max_k
   k_grid <- round(exp(seq(log(min_k), log(max_k), length.out = grid_size)))
 
+  k_grid <- as.integer(k_grid)
+
   if (verbose) {
     message("FDR-guided k_grid: ", paste(k_grid, collapse = ", "),
             " (n_sig = ", n_sig, ")")
