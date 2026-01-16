@@ -5,9 +5,7 @@
 #' @importFrom furrr future_map furrr_options
 #' @importFrom parallelly availableCores
 #' @importFrom AnnotationDbi select keys
-#' @importFrom reactome.db reactome.db
 #' @importFrom clusterProfiler enricher download_KEGG setReadable
-#' @importFrom org.Hs.eg.db org.Hs.eg.db
 
 #' @title Pathway Voting-Based Enrichment Analysis
 #'

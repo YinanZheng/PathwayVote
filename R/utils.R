@@ -190,10 +190,21 @@ prepare_enrichment_data <- function(databases, organism = "human", verbose = FAL
   user_data_list <- list()
 
   if ("GO" %in% databases) {
+    if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
+      stop("Package 'org.Hs.eg.db' is required for GO analysis. Please install it.")
+    }
+    if (!requireNamespace("GO.db", quietly = TRUE)) {
+      stop("Package 'GO.db' is required for GO analysis. Please install it.")
+    }
     if (verbose) message("Preparing GO annotation data...")
+
+    # Retrieve objects explicitly
+    org_db <- org.Hs.eg.db::org.Hs.eg.db
+    go_db <- GO.db::GO.db
+
     # Get GO to Entrez Gene mappings
-    go_data <- suppressMessages(AnnotationDbi::select(org.Hs.eg.db,
-                                                      keys = keys(org.Hs.eg.db, keytype = "ENTREZID"),
+    go_data <- suppressMessages(AnnotationDbi::select(org_db,
+                                                      keys = AnnotationDbi::keys(org_db, keytype = "ENTREZID"),
                                                       columns = c("GOALL", "ONTOLOGYALL"),
                                                       keytype = "ENTREZID"))
 
@@ -201,7 +212,7 @@ prepare_enrichment_data <- function(databases, organism = "human", verbose = FAL
     term2name <- go_data[, c("GOALL", "ONTOLOGYALL")] # We just need a placeholder name, ID is fine
 
     # Get GO term descriptions
-    go_terms <- suppressMessages(AnnotationDbi::select(GO.db::GO.db,
+    go_terms <- suppressMessages(AnnotationDbi::select(go_db,
                                                        keys = unique(term2gene$GOALL),
                                                        columns = c("TERM"),
                                                        keytype = "GOID"))
@@ -219,16 +230,23 @@ prepare_enrichment_data <- function(databases, organism = "human", verbose = FAL
   }
 
   if ("Reactome" %in% databases) {
+    if (!requireNamespace("reactome.db", quietly = TRUE)) {
+      stop("Package 'reactome.db' is required for Reactome analysis. Please install it.")
+    }
     if (verbose) message("Preparing Reactome annotation data...")
+
+    # Retrieve object explicitly
+    reactome_db <- reactome.db::reactome.db
+
     # Use the reactome.db package for compliant data access
-    term2gene <- suppressMessages(AnnotationDbi::select(reactome.db,
-                                                        keys = keys(reactome.db, "ENTREZID"),
+    term2gene <- suppressMessages(AnnotationDbi::select(reactome_db,
+                                                        keys = AnnotationDbi::keys(reactome_db, "ENTREZID"),
                                                         columns = "PATHID",
                                                         keytype = "ENTREZID"))
     colnames(term2gene) <- c("GENE", "TERM")
     term2gene <- term2gene[, c("TERM", "GENE")] # Ensure correct column order
 
-    term2name <- suppressMessages(AnnotationDbi::select(reactome.db,
+    term2name <- suppressMessages(AnnotationDbi::select(reactome_db,
                                                         keys = unique(term2gene$TERM),
                                                         columns = "PATHNAME",
                                                         keytype = "PATHID"))
@@ -268,7 +286,10 @@ run_enrichment <- function(gene_list,
     if (!is.null(res)) {
       if (readable) {
         # Ensure the OrgDb is available for ID mapping
-        res <- tryCatch(clusterProfiler::setReadable(res, OrgDb = org.Hs.eg.db, keyType = "ENTREZID"), error = function(e) res)
+        if (requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
+            org_db <- org.Hs.eg.db::org.Hs.eg.db
+            res <- tryCatch(clusterProfiler::setReadable(res, OrgDb = org_db, keyType = "ENTREZID"), error = function(e) res)
+        }
       }
       enrich_results[[db]] <- as.data.frame(res)
     } else {
