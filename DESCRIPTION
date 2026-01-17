@@ -19,7 +19,6 @@ Imports:
     methods,
     parallelly
 Suggests:
-    testthat,
     GO.db,
     org.Hs.eg.db,
     reactome.db
