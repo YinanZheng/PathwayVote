@@ -21,5 +21,6 @@ Imports:
 Suggests:
     GO.db,
     org.Hs.eg.db,
-    reactome.db
+    reactome.db,
+    openxlsx
 RoxygenNote: 7.3.2
